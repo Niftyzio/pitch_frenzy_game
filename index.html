@@ -188,8 +188,12 @@
             transcriptArea: document.getElementById('transcript-area'),
             warningArea: document.getElementById('warning-area'),
             rulesModal: document.getElementById('rules-modal'),
+            closeRulesButton: document.getElementById('close-rules-button'),
+            startButton: document.getElementById('start-button'),
+            pauseButton: document.getElementById('pause-button'),
             pitchButton: document.getElementById('pitch-now-button'),
             summaryModal: document.getElementById('summary-modal'),
+            closeSummaryButton: document.getElementById('close-summary-button'),
             successfulPitchesDisplay: document.getElementById('successful-pitches'),
             finalScoreDisplay: document.getElementById('final-score'),
             performanceStats: document.getElementById('performance-stats'),
@@ -201,7 +205,33 @@
         let gameTimeLeft = GAME_DURATION_SECONDS;
         let score = 0;
         let currentPitch = null;
+        let isPaused = false;
+        let investors = [];
+        let gameIntervalId = null;
+        let investorSpawnIntervalId = null;
+        let isListening = false;
+        let rulesShown = false;
+        const INVESTOR_DEFAULT_FACE = '🧐';
         
+        // Game statistics tracking
+        let gameStats = {
+            totalPitches: 0,
+            successfulPitches: 0,
+            failedPitches: 0,
+            averageScore: 0,
+            totalScore: 0,
+            pitchAnalysis: {
+                tooSlow: 0,
+                tooFast: 0,
+                highFillerWords: 0,
+                lowKeywordDensity: 0,
+                repetitivePhrases: 0,
+                consecutiveFillers: 0
+            },
+            pitchScores: [],
+            avgPitchScore: 0
+        };
+
         // Initialize transcript variable
         let currentTranscript = '';
 
@@ -784,7 +814,75 @@
             // Show the game summary
             showGameSummary();
         }
-        function startGame() { console.log("Debug: startGame called."); if (isGameRunning) return; if (!rulesShown) { showRulesModal(); rulesShown = true; return; } score = 0; gameTimeRemaining = GAME_DURATION_SECONDS; isGameRunning = true; isPaused = false; currentPitch = null; updateScoreDisplay(); updateGameTimerDisplay(); DOM.startButton.disabled = true; DOM.pauseButton.disabled = false; DOM.pauseButton.textContent = 'Pause'; DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700'); DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700'); clearMessage(); updateMicStatus('idle'); clearWarning('https-warning'); clearWarning('speech-api-warning'); if (window.location.protocol !== 'https:') { console.warn("Debug: Page is not loaded over HTTPS."); showWarning('https-warning', 'Warning: Page is not HTTPS. Microphone access might be blocked by the browser.', 'https'); } else { console.log("Debug: Page is loaded over HTTPS."); } if (!isSpeechApiAvailable) { console.warn("Debug: Speech API IS NOT available."); showWarning('speech-api-warning', "Voice input not supported by browser.", 'api-error'); } else { console.log("Debug: Speech API IS available."); } investors.forEach(inv => { if (inv.element && inv.element.parentNode) inv.element.parentNode.removeChild(inv.element); }); investors = []; gameIntervalId = setInterval(() => { gameTimeRemaining--; updateGameTimerDisplay(); if (gameTimeRemaining <= 0) endGame(); }, 1000); for (let i = 0; i < MAX_INVESTORS / 2; i++) createInvestor(); investorSpawnIntervalId = setInterval(createInvestor, INVESTOR_SPAWN_INTERVAL_MS); }
+        function startGame() {
+            console.log("Debug: startGame called.");
+            if (isGameRunning) return;
+            
+            if (!rulesShown) {
+                showRulesModal();
+                rulesShown = true;
+                return;
+            }
+            
+            // Reset game state
+            score = 0;
+            gameTimeLeft = GAME_DURATION_SECONDS;
+            isGameRunning = true;
+            isPaused = false;
+            currentPitch = null;
+            
+            // Update UI
+            updateScoreDisplay();
+            updateGameTimerDisplay();
+            DOM.startButton.disabled = true;
+            DOM.pauseButton.disabled = false;
+            DOM.pauseButton.textContent = 'Pause';
+            DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700');
+            DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700');
+            
+            // Clear messages and update status
+            clearMessage();
+            updateMicStatus('idle');
+            clearWarning('https-warning');
+            clearWarning('speech-api-warning');
+            
+            // Check HTTPS
+            if (window.location.protocol !== 'https:') {
+                console.warn("Debug: Page is not loaded over HTTPS.");
+                showWarning('https-warning', 'Warning: Page is not HTTPS. Microphone access might be blocked by the browser.', 'https');
+            }
+            
+            // Check Speech API
+            if (!isSpeechApiAvailable) {
+                console.warn("Debug: Speech API IS NOT available.");
+                showWarning('speech-api-warning', "Voice input not supported by browser.", 'api-error');
+            }
+            
+            // Clear existing investors
+            investors.forEach(inv => {
+                if (inv.element && inv.element.parentNode) {
+                    inv.element.parentNode.removeChild(inv.element);
+                }
+            });
+            investors = [];
+            
+            // Start game timer
+            gameIntervalId = setInterval(() => {
+                if (!isPaused) {
+                    gameTimeLeft--;
+                    updateGameTimerDisplay();
+                    if (gameTimeLeft <= 0) endGame();
+                }
+            }, 1000);
+            
+            // Create initial investors
+            for (let i = 0; i < MAX_INVESTORS / 2; i++) {
+                createInvestor();
+            }
+            
+            // Start spawning new investors
+            investorSpawnIntervalId = setInterval(createInvestor, INVESTOR_SPAWN_INTERVAL_MS);
+        }
         function togglePause() {
             if (!isGameRunning) return;
             
@@ -812,12 +910,12 @@
                 DOM.pauseButton.classList.add('bg-green-500', 'hover:bg-green-700');
                 showMessage('Game Paused');
             } else {
-                if (gameTimeRemaining > 0) {
+                if (gameTimeLeft > 0) {
                     // Resume game timer
                     gameIntervalId = setInterval(() => {
-                        gameTimeRemaining--;
+                        gameTimeLeft--;
                         updateGameTimerDisplay();
-                        if (gameTimeRemaining <= 0) endGame();
+                        if (gameTimeLeft <= 0) endGame();
                     }, 1000);
                     
                     // Resume investor spawning
@@ -871,7 +969,42 @@
         }
 
         // --- Event Listeners --- (Same as v1.8)
-        document.addEventListener('DOMContentLoaded', () => { console.log("Debug: DOMContentLoaded event fired."); if (!DOM.rulesModal || !DOM.closeRulesButton) { console.error("Debug: Modal elements not found!"); } else { DOM.closeRulesButton.addEventListener('click', hideRulesModal); } if(DOM.startButton) DOM.startButton.addEventListener('click', startGame); else console.error("Start button not found"); if(DOM.pauseButton) DOM.pauseButton.addEventListener('click', togglePause); else console.error("Pause button not found"); updateGameTimerDisplay(); updateScoreDisplay(); if(DOM.pauseButton) DOM.pauseButton.disabled = true; updateMicStatus('idle'); if (DOM.closeSummaryButton) { DOM.closeSummaryButton.addEventListener('click', () => { hideGameSummary(); startGame(); }); } });
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Debug: DOMContentLoaded event fired.");
+            
+            // Initialize DOM elements
+            if (!DOM.rulesModal || !DOM.closeRulesButton) {
+                console.error("Debug: Modal elements not found!");
+            } else {
+                DOM.closeRulesButton.addEventListener('click', hideRulesModal);
+            }
+            
+            if (DOM.startButton) {
+                DOM.startButton.addEventListener('click', startGame);
+            } else {
+                console.error("Start button not found");
+            }
+            
+            if (DOM.pauseButton) {
+                DOM.pauseButton.addEventListener('click', togglePause);
+                DOM.pauseButton.disabled = true;
+            } else {
+                console.error("Pause button not found");
+            }
+            
+            if (DOM.closeSummaryButton) {
+                DOM.closeSummaryButton.addEventListener('click', () => {
+                    hideGameSummary();
+                    resetGame();
+                    startGame();
+                });
+            }
+            
+            // Initialize display
+            updateGameTimerDisplay();
+            updateScoreDisplay();
+            updateMicStatus('idle');
+        });
 
         /** Creates a new investor and adds it to the game area */
         function createInvestor() {
