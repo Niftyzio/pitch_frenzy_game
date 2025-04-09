@@ -41,4 +41,96 @@ body {
     letter-spacing: 2px;
 }
 
-/* Rest of the styles from index.html */ 
+/* Rest of the styles from index.html */
+
+/* Pitch Score Feedback */
+.score-breakdown {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.score-item {
+    display: flex;
+    align-items: center;
+    margin: 0.5rem 0;
+    gap: 1rem;
+}
+
+.score-item label {
+    width: 100px;
+    font-weight: 500;
+}
+
+.score-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    transition: width 0.3s ease;
+}
+
+.score-item span {
+    min-width: 40px;
+    text-align: right;
+    font-weight: 500;
+}
+
+.feedback-header {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.feedback-header h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.feedback-tips {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.feedback-tips h4 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.feedback-tips ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.feedback-tips li {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+}
+
+.feedback-tips li:before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: var(--accent-color);
+}
+
+/* Update investor face styles for score display */
+.investor .face {
+    transition: all 0.3s ease;
+    text-align: center;
+    min-width: 60px;
+}
+
+.investor .face.score {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+} 
