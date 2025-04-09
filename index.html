@@ -95,8 +95,9 @@
             <button id="start-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Start Game</button>
             <button id="pause-button" class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Pause</button>
          </div>
-         <div class="flex items-center mt-3 space-x-2">
-             <span id="mic-status" class="text-gray-400"></span>
+         <div class="flex items-center mt-3 space-x-4">
+             <div id="mic-status" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200"></div>
+             <button id="pitch-now-button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out hidden">Pitch Now!</button>
              <p id="message-area" class="h-6 text-gray-700 font-semibold"></p>
          </div>
          <p id="transcript-area" class="mt-1 h-10 text-sm text-gray-500 italic"></p>
@@ -107,14 +108,14 @@
         console.log("Script execution started.");
 
         // --- SVG Icons --- (Same as v1.7)
-        const MIC_OFF_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2a7 7 0 0 0-11.73-5.14"/><path d="M8.6 8.6A3 3 0 0 0 8 10v2a3 3 0 0 0 4.48 2.72"/><path d="M12 19v4"/><path d="M8 23h8"/></svg>`;
-        const MIC_ON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="8" x2="16" y1="23" y2="23"/></svg>`;
+        const MIC_OFF_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="8" x2="16" y1="23" y2="23"/></svg>`;
+        const MIC_ON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="8" x2="16" y1="23" y2="23"/></svg>`;
 
         // --- Keyword Definitions ---
         const POSITIVE_KEYWORDS = ["market", "growth", "revenue", "solution", "problem", "team", "traction", "unique", "disrupt", "value", "customer", "scale", "profit", "innovate", "strategy", "opportunity", "potential", "competitive", "advantage", "data", "users", "launch", "funding", "build", "develop"];
         // *** Added hmm, hmmm, err ***
         const NEGATIVE_KEYWORDS = ["um", "uh", "like", "basically", "actually", "really", "just", "stuff", "things", "guess", "kinda", "sorta", "hello", "hi", "hmm", "hmmm", "err"];
-        const MIN_WORD_COUNT = 8;
+        const MIN_WORD_COUNT = 10;
 
         // --- Web Speech API Setup --- (Same as v1.7)
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -123,8 +124,10 @@
         let currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 }; // Store analysis results including factor
 
         // --- Game Configuration & State --- (Same as v1.7)
-        const GAME_DURATION_SECONDS = 10 * 60; const PITCH_DURATION_SECONDS = 30;
-        const MAX_INVESTORS = 8; const INVESTOR_SPAWN_INTERVAL_MS = 5000;
+        const GAME_DURATION_SECONDS = 600; // 10 minutes
+        const PITCH_DURATION_SECONDS = 30;
+        const MAX_INVESTORS = 12; // Increased from 8 to 12
+        const INVESTOR_SPAWN_INTERVAL_MS = 3000; // Decreased from 5000 to 3000ms
         const VOICE_LISTEN_DURATION_MS = 10000;
         const DOM = { 
             gameTimerDisplay: document.getElementById('game-timer'), 
@@ -174,7 +177,42 @@
         function updateScoreDisplay() { DOM.scoreDisplay.textContent = score; }
         function showMessage(msg, isError = false, persist = false) { if (!DOM.messageArea) { console.error("Debug: messageArea not found!"); return; } DOM.messageArea.textContent = msg; DOM.messageArea.style.color = isError ? '#dc2626' : '#374151'; if (!isError && !persist) { setTimeout(() => { if (DOM.messageArea.textContent === msg) DOM.messageArea.textContent = ''; }, 3000); } }
         function clearMessage() { if (DOM.messageArea) DOM.messageArea.textContent = ''; if (DOM.transcriptArea) DOM.transcriptArea.textContent = ''; }
-        function updateMicStatus(status) { if (!DOM.micStatus) { console.error("Debug: micStatus element not found!"); return; } console.log("Debug: Updating mic status to:", status); let svg = MIC_OFF_SVG; let colorClass = 'text-gray-400'; switch (status) { case 'listening': svg = MIC_ON_SVG; colorClass = 'text-red-500'; break; case 'processing': svg = MIC_ON_SVG; colorClass = 'text-blue-500'; break; case 'error': svg = MIC_OFF_SVG; colorClass = 'text-red-500'; break; case 'idle': default: svg = MIC_OFF_SVG; colorClass = 'text-gray-400'; break; } DOM.micStatus.innerHTML = svg; DOM.micStatus.className = colorClass; }
+        function updateMicStatus(status) {
+            if (!DOM.micStatus) {
+                console.error("Debug: micStatus element not found!");
+                return;
+            }
+            console.log("Debug: Updating mic status to:", status);
+            let svg = MIC_OFF_SVG;
+            let colorClass = 'text-gray-400';
+            let pitchButton = document.getElementById('pitch-now-button');
+            
+            switch (status) {
+                case 'listening':
+                    svg = MIC_ON_SVG;
+                    colorClass = 'text-red-500 bg-red-100';
+                    if (pitchButton) pitchButton.classList.remove('hidden');
+                    break;
+                case 'processing':
+                    svg = MIC_ON_SVG;
+                    colorClass = 'text-blue-500 bg-blue-100';
+                    if (pitchButton) pitchButton.classList.add('hidden');
+                    break;
+                case 'error':
+                    svg = MIC_OFF_SVG;
+                    colorClass = 'text-red-500 bg-red-100';
+                    if (pitchButton) pitchButton.classList.add('hidden');
+                    break;
+                case 'idle':
+                default:
+                    svg = MIC_OFF_SVG;
+                    colorClass = 'text-gray-400 bg-gray-200';
+                    if (pitchButton) pitchButton.classList.add('hidden');
+                    break;
+            }
+            DOM.micStatus.innerHTML = svg;
+            DOM.micStatus.className = `flex items-center justify-center w-10 h-10 rounded-full ${colorClass}`;
+        }
         function showWarning(id, text, type = 'api-error') { if (!DOM.debugWarningArea) return; const existing = document.getElementById(id); if (existing) existing.remove(); const warning = document.createElement('p'); warning.id = id; warning.textContent = text; warning.className = type === 'https' ? 'debug-warning' : 'api-error-warning'; DOM.debugWarningArea.appendChild(warning); }
         function clearWarning(id) { const existing = document.getElementById(id); if (existing) existing.remove(); }
         function showRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.remove('hidden'); } }
@@ -567,7 +605,20 @@
                 if (DOM.transcriptArea) DOM.transcriptArea.innerHTML = '';
             }, 1500);
         }
-        function removeInvestor(investorData) { if (investorData.pitchTimerId) clearInterval(investorData.pitchTimerId); if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId); if (investorData.element && investorData.element.parentNode === DOM.gameArea) { DOM.gameArea.removeChild(investorData.element); } investors = investors.filter(inv => inv.id !== investorData.id); if (isGameRunning && !isPaused && investors.length < MAX_INVESTORS / 2) { setTimeout(createInvestor, 1000); } }
+        function removeInvestor(investorData) {
+            console.log("Removing investor...");
+            if (investorData.pitchTimerId) clearInterval(investorData.pitchTimerId);
+            if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId);
+            if (investorData.element && investorData.element.parentNode === DOM.gameArea) {
+                DOM.gameArea.removeChild(investorData.element);
+            }
+            investors = investors.filter(inv => inv.id !== investorData.id);
+            console.log("Investor removed. Remaining investors:", investors.length);
+            if (isGameRunning && !isPaused && investors.length < MAX_INVESTORS / 2) {
+                console.log("Scheduling new investor creation...");
+                setTimeout(createInvestor, 1000);
+            }
+        }
         function endGame() {
             stopRecognition();
             isGameRunning = false;
@@ -600,6 +651,34 @@
 
         // --- Event Listeners --- (Same as v1.8)
         document.addEventListener('DOMContentLoaded', () => { console.log("Debug: DOMContentLoaded event fired."); if (!DOM.rulesModal || !DOM.closeRulesButton) { console.error("Debug: Modal elements not found!"); } else { DOM.closeRulesButton.addEventListener('click', hideRulesModal); } if(DOM.startButton) DOM.startButton.addEventListener('click', startGame); else console.error("Start button not found"); if(DOM.pauseButton) DOM.pauseButton.addEventListener('click', togglePause); else console.error("Pause button not found"); updateGameTimerDisplay(); updateScoreDisplay(); if(DOM.pauseButton) DOM.pauseButton.disabled = true; updateMicStatus('idle'); if (DOM.closeSummaryButton) { DOM.closeSummaryButton.addEventListener('click', () => { hideGameSummary(); startGame(); }); } });
+
+        /** Creates a new investor and adds it to the game area */
+        function createInvestor() {
+            console.log("Creating new investor...");
+            if (investors.length >= MAX_INVESTORS) {
+                console.log("Max investors reached:", investors.length);
+                return;
+            }
+            const investorData = {
+                id: Date.now(),
+                element: document.createElement('div'),
+                isBeingPitched: false,
+                hasBeenPitched: false,
+                boredomLevel: 0,
+                pitchTimerId: null,
+                boredomTimerId: null,
+                boredomIncrementFactor: 0.2
+            };
+            investorData.element.className = 'character';
+            investorData.element.style.left = `${Math.random() * (DOM.gameArea.clientWidth - 50)}px`;
+            investorData.element.style.top = `${Math.random() * (DOM.gameArea.clientHeight - 50)}px`;
+            investorData.element.style.backgroundColor = '#f3f4f6';
+            investorData.element.innerHTML = `<span class="face">${INVESTOR_DEFAULT_FACE}</span>`;
+            investorData.element.addEventListener('click', () => startPitch(investorData));
+            DOM.gameArea.appendChild(investorData.element);
+            investors.push(investorData);
+            console.log("Investor created. Total investors:", investors.length);
+        }
 
     </script>
 
