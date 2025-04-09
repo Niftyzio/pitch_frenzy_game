@@ -365,10 +365,49 @@
         const NEGATIVE_KEYWORDS = ["um", "uh", "like", "basically", "actually", "really", "just", "stuff", "things", "guess", "kinda", "sorta", "hello", "hi", "hmm", "hmmm", "err"];
         const MIN_WORD_COUNT = 10;
 
-        // --- Web Speech API Setup --- (Same as v1.7)
+        // --- Web Speech API Setup ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
         const isSpeechApiAvailable = !!SpeechRecognition;
+
+        // Add browser support check function
+        function checkSpeechRecognitionSupport() {
+            if (!isSpeechApiAvailable) {
+                console.error("Speech Recognition API is not supported in this browser");
+                showWarning('speech-api-warning', "Voice input not supported by this browser. Please use Chrome, Edge, or Safari.", 'api-error');
+                return false;
+            }
+            
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                console.warn("Speech Recognition requires HTTPS (except on localhost)");
+                showWarning('https-warning', 'HTTPS is required for microphone access. Please use a secure connection.', 'https');
+                return false;
+            }
+            
+            return true;
+        }
+
+        // Add initialization function
+        function initializeSpeechRecognition() {
+            if (!checkSpeechRecognitionSupport()) {
+                return null;
+            }
+
+            try {
+                const recognitionInstance = new SpeechRecognition();
+                recognitionInstance.continuous = true;
+                recognitionInstance.interimResults = true;
+                recognitionInstance.lang = 'en-US';
+                recognitionInstance.maxAlternatives = 1;
+                
+                return recognitionInstance;
+            } catch (error) {
+                console.error("Error initializing speech recognition:", error);
+                showWarning('speech-api-error', 'Failed to initialize speech recognition. Please try reloading the page.', 'api-error');
+                return null;
+            }
+        }
+
         let currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 }; // Store analysis results including factor
 
         // --- Game Configuration & State ---
@@ -864,10 +903,11 @@
                 return;
             }
             
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+            recognition = initializeSpeechRecognition();
+            if (!recognition) {
+                showMessage("Failed to initialize speech recognition. Please check your browser settings.", true);
+                return;
+            }
             
             recognition.onstart = () => {
                 console.log("Speech recognition started");
