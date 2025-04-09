@@ -673,7 +673,18 @@
             investorData.element.style.left = `${Math.random() * (DOM.gameArea.clientWidth - 50)}px`;
             investorData.element.style.top = `${Math.random() * (DOM.gameArea.clientHeight - 50)}px`;
             investorData.element.style.backgroundColor = '#f3f4f6';
-            investorData.element.innerHTML = `<span class="face">${INVESTOR_DEFAULT_FACE}</span>`;
+            
+            // Add timer and boredom meters
+            investorData.element.innerHTML = `
+                <div class="timer-bar-container">
+                    <div class="timer-bar" style="width: 100%"></div>
+                </div>
+                <div class="boredom-bar-container">
+                    <div class="boredom-bar" style="width: 0%"></div>
+                </div>
+                <span class="face">${INVESTOR_DEFAULT_FACE}</span>
+            `;
+            
             investorData.element.addEventListener('click', () => startPitch(investorData));
             DOM.gameArea.appendChild(investorData.element);
             investors.push(investorData);
