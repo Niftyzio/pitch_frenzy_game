@@ -96,10 +96,29 @@
         </div>
     </div>
 
-    <!-- Load game scripts -->
-    <script type="module" src="js/core/sound-manager.js"></script>
-    <script type="module" src="js/analysis/pitch-analysis.js"></script>
-    <script type="module" src="js/core/game.js"></script>
+    <!-- Initialize game -->
+    <script type="module">
+        import { startGame, togglePause } from './js/core/game.js';
+        
+        // Add event listeners once DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.getElementById('start-button');
+            const pauseButton = document.getElementById('pause-button');
+            const closeRulesButton = document.getElementById('close-rules-button');
+            const closeSummaryButton = document.getElementById('close-summary-button');
+            
+            if (startButton) startButton.addEventListener('click', startGame);
+            if (pauseButton) pauseButton.addEventListener('click', togglePause);
+            if (closeRulesButton) closeRulesButton.addEventListener('click', () => {
+                document.getElementById('rules-modal').classList.add('hidden');
+                startGame();
+            });
+            if (closeSummaryButton) closeSummaryButton.addEventListener('click', () => {
+                document.getElementById('summary-modal').classList.add('hidden');
+                startGame();
+            });
+        });
+    </script>
 </body>
 </html>
 

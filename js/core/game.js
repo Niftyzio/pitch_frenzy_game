@@ -209,7 +209,62 @@ function createInvestor() {
         }
     }
 
-    // ... rest of createInvestor function ...
+    // Setup investor element
+    investorData.element.className = 'investor';
+    if (selectedType !== INVESTOR_TYPES.NORMAL) {
+        investorData.element.classList.add('special');
+    }
+    
+    // Add padding for the timer and boredom bars
+    const padding = 60;
+    const gameArea = document.getElementById('game-area');
+    investorData.element.style.left = `${Math.random() * (gameArea.clientWidth - padding)}px`;
+    investorData.element.style.top = `${Math.random() * (gameArea.clientHeight - padding)}px`;
+    
+    // Add investor content
+    investorData.element.innerHTML = `
+        <div class="timer-bar-container">
+            <div class="timer-bar" style="width: 100%"></div>
+        </div>
+        <div class="boredom-bar-container">
+            <div class="boredom-bar" style="width: 0%"></div>
+        </div>
+        <span class="face">${selectedType.face}</span>
+        ${investorData.powerUp ? `<div class="power-up-indicator">${investorData.powerUp.name.split(' ')[0]}</div>` : ''}
+    `;
+    
+    // Add click event listener
+    investorData.element.addEventListener('click', () => {
+        if (!isGameRunning || isPaused || investorData.hasBeenPitched || currentPitch) return;
+        soundManager.play('CLICK');
+        startPitch(investorData);
+    });
+    
+    // Add to game
+    gameArea.appendChild(investorData.element);
+    investors.push(investorData);
+    
+    return investorData;
+}
+
+function spawnInitialInvestors() {
+    // Clear existing investors
+    const gameArea = document.getElementById('game-area');
+    gameArea.innerHTML = '';
+    investors = [];
+    
+    // Create initial set of investors
+    for (let i = 0; i < MAX_INVESTORS / 2; i++) {
+        createInvestor();
+    }
+}
+
+function startInvestorSpawning() {
+    investorSpawnIntervalId = setInterval(() => {
+        if (!isPaused && investors.length < MAX_INVESTORS) {
+            createInvestor();
+        }
+    }, INVESTOR_SPAWN_INTERVAL_MS);
 }
 
 function activatePowerUp(powerUp, investor) {
