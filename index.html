@@ -1376,26 +1376,38 @@
             // Track silence
             let lastTranscriptLength = 0;
             let silenceCounter = 0;
-            const SILENCE_THRESHOLD = 5; // 500ms of silence increases boredom
+            const SILENCE_THRESHOLD = 10; // 1 second of silence before increasing boredom
+            const GRACE_PERIOD = 30; // 3 seconds grace period at start
+            let gracePeriodCounter = 0;
+            
+            // Set initial boredom increment to be more forgiving
+            investorData.boredomIncrementFactor = 0.1;
             
             investorData.boredomTimerId = setInterval(() => {
                 if (isPaused || !investorData.isBeingPitched) return;
+                
+                // Grace period at the start
+                if (gracePeriodCounter < GRACE_PERIOD) {
+                    gracePeriodCounter++;
+                    return;
+                }
                 
                 // Check for silence by comparing transcript length
                 const currentTranscriptLength = (DOM.transcriptArea?.textContent || '').length;
                 if (currentTranscriptLength === lastTranscriptLength) {
                     silenceCounter++;
                     if (silenceCounter >= SILENCE_THRESHOLD) {
-                        // Increase boredom more during silence
-                        investorData.boredomIncrementFactor *= 1.5;
+                        // Increase boredom more during extended silence, but more gradually
+                        investorData.boredomIncrementFactor = Math.min(0.3, investorData.boredomIncrementFactor * 1.2);
                     }
                 } else {
                     silenceCounter = 0;
-                    investorData.boredomIncrementFactor = Math.max(0.2, investorData.boredomIncrementFactor / 1.5);
+                    // Reduce boredom increment when speaking, but maintain minimum
+                    investorData.boredomIncrementFactor = Math.max(0.1, investorData.boredomIncrementFactor / 1.2);
                 }
                 lastTranscriptLength = currentTranscriptLength;
                 
-                // Increase boredom level
+                // Increase boredom level more gradually
                 investorData.boredomLevel += investorData.boredomIncrementFactor;
                 const boredomBar = investorData.element.querySelector('.boredom-bar');
                 if (boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
