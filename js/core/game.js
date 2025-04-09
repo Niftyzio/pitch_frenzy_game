@@ -1,5 +1,6 @@
 import soundManager from './sound-manager.js';
 import { calculatePitchScore } from '../analysis/pitch-analysis.js';
+import { initializeSpeechRecognition, startSpeechRecognition, stopSpeechRecognition } from './speech.js';
 
 // Game Configuration Constants
 const GAME_DURATION_SECONDS = 180;  // 3 minutes total game time
@@ -82,6 +83,7 @@ let investorSpawnIntervalId = null;
 let isListening = false;
 let rulesShown = false;
 let activePowerUps = new Set();
+let recognition = null;
 
 export function startGame() {
     if (isGameRunning) return;
@@ -89,6 +91,13 @@ export function startGame() {
     if (!rulesShown) {
         showRulesModal();
         rulesShown = true;
+        return;
+    }
+    
+    // Initialize speech recognition
+    recognition = initializeSpeechRecognition();
+    if (!recognition) {
+        showMessage("Speech recognition not available. Please use a supported browser.", true);
         return;
     }
     
