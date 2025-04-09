@@ -50,6 +50,31 @@
         </div>
     </div>
 
+    <div id="summary-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+            <h2 class="text-2xl font-bold mb-4 text-center text-blue-600">Pitch Frenzy Results!</h2>
+            <div class="mb-6">
+                <div class="text-center mb-4">
+                    <p class="text-xl font-semibold">You successfully pitched to <span id="successful-pitches" class="text-green-600">0</span> investors!</p>
+                    <p class="text-lg">Total Score: <span id="final-score" class="text-blue-600">0</span></p>
+                </div>
+                <div class="border-t border-gray-200 pt-4">
+                    <h3 class="font-semibold mb-2">Performance Analysis:</h3>
+                    <ul id="performance-stats" class="list-disc list-inside text-gray-700 space-y-2">
+                    </ul>
+                </div>
+                <div class="border-t border-gray-200 pt-4 mt-4">
+                    <h3 class="font-semibold mb-2">Improvement Tips:</h3>
+                    <ul id="improvement-tips" class="list-disc list-inside text-gray-700 space-y-2">
+                    </ul>
+                </div>
+            </div>
+            <div class="text-center">
+                <button id="close-summary-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Play Again</button>
+            </div>
+        </div>
+    </div>
+
     <h1 class="text-3xl font-bold mb-4 text-blue-600">Pitch Frenzy! (Voice Enabled - Stricter Analysis)</h1>
 
     <div class="flex justify-between w-full max-w-4xl mb-4 p-3 bg-white rounded-lg shadow">
@@ -101,11 +126,47 @@
         const GAME_DURATION_SECONDS = 10 * 60; const PITCH_DURATION_SECONDS = 30;
         const MAX_INVESTORS = 8; const INVESTOR_SPAWN_INTERVAL_MS = 5000;
         const VOICE_LISTEN_DURATION_MS = 10000;
-        const DOM = { /* ... cache elements ... */ gameTimerDisplay: document.getElementById('game-timer'), scoreDisplay: document.getElementById('score'), gameArea: document.getElementById('game-area'), founder: document.getElementById('founder'), startButton: document.getElementById('start-button'), pauseButton: document.getElementById('pause-button'), messageArea: document.getElementById('message-area'), micStatus: document.getElementById('mic-status'), transcriptArea: document.getElementById('transcript-area'), debugWarningArea: document.getElementById('debug-warning-area'), rulesModal: document.getElementById('rules-modal'), closeRulesButton: document.getElementById('close-rules-button') };
+        const DOM = { 
+            gameTimerDisplay: document.getElementById('game-timer'), 
+            scoreDisplay: document.getElementById('score'), 
+            gameArea: document.getElementById('game-area'), 
+            founder: document.getElementById('founder'), 
+            startButton: document.getElementById('start-button'), 
+            pauseButton: document.getElementById('pause-button'), 
+            messageArea: document.getElementById('message-area'), 
+            micStatus: document.getElementById('mic-status'), 
+            transcriptArea: document.getElementById('transcript-area'), 
+            debugWarningArea: document.getElementById('debug-warning-area'), 
+            rulesModal: document.getElementById('rules-modal'), 
+            closeRulesButton: document.getElementById('close-rules-button'),
+            summaryModal: document.getElementById('summary-modal'),
+            closeSummaryButton: document.getElementById('close-summary-button'),
+            successfulPitchesDisplay: document.getElementById('successful-pitches'),
+            finalScoreDisplay: document.getElementById('final-score'),
+            performanceStats: document.getElementById('performance-stats'),
+            improvementTips: document.getElementById('improvement-tips')
+        };
         let score = 0; let gameTimeRemaining = GAME_DURATION_SECONDS; let gameIntervalId = null; let investorSpawnIntervalId = null;
         let investors = []; let isGameRunning = false; let isPaused = false; let currentPitch = null; let isListening = false;
         const INVESTOR_DEFAULT_FACE = '🧐'; const INVESTOR_SUCCESS_FACE = '👍'; const INVESTOR_FAIL_FACE = '😴';
         let rulesShown = false;
+
+        // Game statistics tracking
+        let gameStats = {
+            totalPitches: 0,
+            successfulPitches: 0,
+            failedPitches: 0,
+            averageScore: 0,
+            totalScore: 0,
+            pitchAnalysis: {
+                tooSlow: 0,
+                tooFast: 0,
+                highFillerWords: 0,
+                lowKeywordDensity: 0,
+                repetitivePhrases: 0,
+                consecutiveFillers: 0
+            }
+        };
 
         // --- Functions --- (formatTime, updateGameTimerDisplay, updateScoreDisplay, showMessage, clearMessage, updateMicStatus, showWarning, clearWarning, showRulesModal, hideRulesModal - same as v1.8)
         function formatTime(totalSeconds) { const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60; return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
@@ -119,33 +180,180 @@
         function showRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.remove('hidden'); } }
         function hideRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.add('hidden'); } }
 
+        function updateGameStats(analysis, success) {
+            gameStats.totalPitches++;
+            if (success) gameStats.successfulPitches++;
+            else gameStats.failedPitches++;
+            
+            gameStats.totalScore += analysis.score;
+            gameStats.averageScore = gameStats.totalScore / gameStats.totalPitches;
+
+            // Track specific issues
+            const wordsPerMinute = (analysis.words / (analysis.duration || 30)) * 60;
+            if (wordsPerMinute < 100) gameStats.pitchAnalysis.tooSlow++;
+            if (wordsPerMinute > 180) gameStats.pitchAnalysis.tooFast++;
+            
+            const fillerRatio = analysis.negative / analysis.words;
+            if (fillerRatio > 0.15) gameStats.pitchAnalysis.highFillerWords++;
+            
+            const keywordDensity = analysis.positive / analysis.words;
+            if (keywordDensity < 0.1) gameStats.pitchAnalysis.lowKeywordDensity++;
+            
+            if (analysis.repetitionPenalty > 1) gameStats.pitchAnalysis.repetitivePhrases++;
+            if (analysis.maxConsecutiveFillerWords >= 3) gameStats.pitchAnalysis.consecutiveFillers++;
+        }
+
+        function showGameSummary() {
+            // Update summary displays
+            DOM.successfulPitchesDisplay.textContent = gameStats.successfulPitches;
+            DOM.finalScoreDisplay.textContent = score;
+
+            // Clear previous stats
+            DOM.performanceStats.innerHTML = '';
+            DOM.improvementTips.innerHTML = '';
+
+            // Add performance statistics
+            const stats = [
+                `Success Rate: ${((gameStats.successfulPitches / gameStats.totalPitches) * 100).toFixed(1)}%`,
+                `Average Pitch Score: ${gameStats.averageScore.toFixed(1)}`,
+                `Total Pitches Attempted: ${gameStats.totalPitches}`
+            ];
+            stats.forEach(stat => {
+                const li = document.createElement('li');
+                li.textContent = stat;
+                DOM.performanceStats.appendChild(li);
+            });
+
+            // Generate improvement tips based on statistics
+            const tips = [];
+            
+            if (gameStats.pitchAnalysis.tooSlow > gameStats.totalPitches / 2) {
+                tips.push("Try speaking a bit faster - aim for 100-180 words per minute");
+            }
+            if (gameStats.pitchAnalysis.tooFast > gameStats.totalPitches / 2) {
+                tips.push("Slow down your speaking pace for better clarity");
+            }
+            if (gameStats.pitchAnalysis.highFillerWords > gameStats.totalPitches / 2) {
+                tips.push("Reduce filler words like 'um', 'like', and 'hmm'");
+            }
+            if (gameStats.pitchAnalysis.lowKeywordDensity > gameStats.totalPitches / 2) {
+                tips.push("Include more business keywords like 'market', 'growth', and 'solution'");
+            }
+            if (gameStats.pitchAnalysis.repetitivePhrases > gameStats.totalPitches / 2) {
+                tips.push("Avoid repeating the same phrases multiple times");
+            }
+            if (gameStats.pitchAnalysis.consecutiveFillers > gameStats.totalPitches / 2) {
+                tips.push("Try to avoid using multiple filler words in a row");
+            }
+
+            // Add general tips if no specific issues were identified
+            if (tips.length === 0) {
+                tips.push("Great job! Keep practicing to maintain your skills");
+                tips.push("Try to vary your pitch structure for different investors");
+            }
+
+            tips.forEach(tip => {
+                const li = document.createElement('li');
+                li.textContent = tip;
+                DOM.improvementTips.appendChild(li);
+            });
+
+            // Show the summary modal
+            DOM.summaryModal.classList.remove('hidden');
+        }
+
+        function hideGameSummary() {
+            DOM.summaryModal.classList.add('hidden');
+            // Reset game stats for next game
+            gameStats = {
+                totalPitches: 0,
+                successfulPitches: 0,
+                failedPitches: 0,
+                averageScore: 0,
+                totalScore: 0,
+                pitchAnalysis: {
+                    tooSlow: 0,
+                    tooFast: 0,
+                    highFillerWords: 0,
+                    lowKeywordDensity: 0,
+                    repetitivePhrases: 0,
+                    consecutiveFillers: 0
+                }
+            };
+        }
 
         /** Analyzes transcript for keywords and length */
         function analyzePitch(transcript) {
-            console.log("Analyzing transcript:", transcript); // Log raw transcript
+            console.log("Analyzing transcript:", transcript);
             const words = transcript.toLowerCase().split(/\s+/).filter(Boolean);
             const wordCount = words.length;
             let positiveCount = 0;
             let negativeCount = 0;
             let foundPositive = [];
             let foundNegative = [];
-
-            words.forEach(word => {
+            
+            // Track speaking patterns
+            let consecutiveFillerWords = 0;
+            let maxConsecutiveFillerWords = 0;
+            let lastWordWasFiller = false;
+            let repeatedPhrases = new Map();
+            let currentPhrase = [];
+            
+            words.forEach((word, index) => {
                 const cleanWord = word.replace(/[.,!?]/g, '');
-                console.log("Checking word:", cleanWord); // Log word being checked
+                console.log("Checking word:", cleanWord);
+                
+                // Check for repeated phrases (3+ words)
+                currentPhrase.push(cleanWord);
+                if (currentPhrase.length >= 3) {
+                    const phrase = currentPhrase.slice(-3).join(' ');
+                    repeatedPhrases.set(phrase, (repeatedPhrases.get(phrase) || 0) + 1);
+                }
+                
                 if (POSITIVE_KEYWORDS.includes(cleanWord)) {
                     positiveCount++;
                     foundPositive.push(cleanWord);
+                    consecutiveFillerWords = 0;
+                    lastWordWasFiller = false;
                 } else if (NEGATIVE_KEYWORDS.includes(cleanWord)) {
                     negativeCount++;
                     foundNegative.push(cleanWord);
+                    if (lastWordWasFiller) {
+                        consecutiveFillerWords++;
+                        maxConsecutiveFillerWords = Math.max(maxConsecutiveFillerWords, consecutiveFillerWords);
+                    } else {
+                        consecutiveFillerWords = 1;
+                    }
+                    lastWordWasFiller = true;
+                } else {
+                    consecutiveFillerWords = 0;
+                    lastWordWasFiller = false;
                 }
             });
 
-            const score = positiveCount - negativeCount;
-            console.log(`Pitch Analysis: Words=${wordCount}, Positive=${positiveCount} (${foundPositive.join(',')}), Negative=${negativeCount} (${foundNegative.join(',')}), Score=${score}`);
+            // Calculate speaking duration (approximate)
+            const estimatedDuration = Math.max(5, Math.ceil(wordCount / 2.5)); // Assuming average speaking rate of 2.5 words per second
+            
+            // Calculate repetition score
+            let repetitionPenalty = 0;
+            repeatedPhrases.forEach((count, phrase) => {
+                if (count > 1) {
+                    repetitionPenalty += (count - 1) * 0.5;
+                }
+            });
 
-            return { score: score, words: wordCount, positive: positiveCount, negative: negativeCount };
+            const score = positiveCount - negativeCount - repetitionPenalty;
+            console.log(`Pitch Analysis: Words=${wordCount}, Positive=${positiveCount} (${foundPositive.join(',')}), Negative=${negativeCount} (${foundNegative.join(',')}), Max Consecutive Fillers=${maxConsecutiveFillerWords}, Repetition Penalty=${repetitionPenalty.toFixed(2)}, Score=${score}`);
+
+            return { 
+                score: score, 
+                words: wordCount, 
+                positive: positiveCount, 
+                negative: negativeCount,
+                duration: estimatedDuration,
+                maxConsecutiveFillerWords: maxConsecutiveFillerWords,
+                repetitionPenalty: repetitionPenalty
+            };
         }
 
         /** Determines boredom factor based on pitch analysis */
@@ -153,20 +361,74 @@
             let factor = 0.1; // Default: Very Fast
             let reason = "(Default/Error)";
 
-            if (analysis.words < MIN_WORD_COUNT) {
-                factor = 0.1; reason = "(Too Short)";
-            } else if (analysis.score <= 0) {
-                 // *** Increased penalty for score <= 0 ***
-                factor = 0.15; reason = "(Low/Negative Score)";
+            // Base factor from score
+            let scoreFactor = 0.1;
+            if (analysis.score <= 0) {
+                scoreFactor = 0.15;
             } else if (analysis.score <= 2) {
-                factor = 0.6; reason = "(Okay Score)";
-            } else { // Score > 2
-                factor = 0.9; reason = "(Good Score)";
+                scoreFactor = 0.6;
+            } else {
+                scoreFactor = 0.9;
             }
+
+            // Speaking pace penalty
+            const wordsPerMinute = (analysis.words / (analysis.duration || 30)) * 60;
+            let paceFactor = 1.0;
+            if (wordsPerMinute < 100) {
+                paceFactor = 1.3; // Too slow
+            } else if (wordsPerMinute > 180) {
+                paceFactor = 1.2; // Too fast
+            }
+
+            // Keyword density bonus
+            const keywordDensity = analysis.positive / analysis.words;
+            let densityFactor = 1.0;
+            if (keywordDensity < 0.1) {
+                densityFactor = 1.4; // Very few keywords
+            } else if (keywordDensity > 0.3) {
+                densityFactor = 0.8; // Good keyword density
+            }
+
+            // Filler word penalty
+            const fillerRatio = analysis.negative / analysis.words;
+            let fillerFactor = 1.0;
+            if (fillerRatio > 0.15) {
+                fillerFactor = 1.5; // Too many filler words
+            } else if (fillerRatio > 0.1) {
+                fillerFactor = 1.3;
+            }
+
+            // Consecutive filler words penalty
+            let consecutiveFillerFactor = 1.0;
+            if (analysis.maxConsecutiveFillerWords >= 3) {
+                consecutiveFillerFactor = 1.4; // Heavy penalty for 3+ consecutive filler words
+            } else if (analysis.maxConsecutiveFillerWords >= 2) {
+                consecutiveFillerFactor = 1.2;
+            }
+
+            // Repetition penalty
+            let repetitionFactor = 1.0;
+            if (analysis.repetitionPenalty > 1) {
+                repetitionFactor = 1.3; // Significant penalty for repetitive phrases
+            } else if (analysis.repetitionPenalty > 0.5) {
+                repetitionFactor = 1.2;
+            }
+
+            // Progressive difficulty
+            const gameProgress = Math.min(1, score / 5);
+            const difficultyFactor = 1 + (gameProgress * 0.3); // Up to 30% harder
+
+            // Calculate final factor
+            factor = scoreFactor * paceFactor * densityFactor * fillerFactor * consecutiveFillerFactor * repetitionFactor * difficultyFactor;
+            
+            // Cap the factor between 0.1 and 1.5
+            factor = Math.max(0.1, Math.min(1.5, factor));
+
+            reason = `(Score:${scoreFactor.toFixed(2)} Pace:${paceFactor.toFixed(2)} Density:${densityFactor.toFixed(2)} Filler:${fillerFactor.toFixed(2)} Consec:${consecutiveFillerFactor.toFixed(2)} Rep:${repetitionFactor.toFixed(2)} Difficulty:${difficultyFactor.toFixed(2)})`;
             console.log(`Boredom Factor: ${factor.toFixed(2)} ${reason}`);
+            
             return factor;
         }
-
 
         /** Starts the pitch: initiates timers and voice recognition */
         function startPitch(investorData) {
@@ -270,15 +532,74 @@
         }
 
         // --- Other Functions (endPitch, removeInvestor, endGame, startGame, togglePause) ---
-        // Minor change in endPitch to clear innerHTML
-        function endPitch(investorData, success, message) { if (!investorData || !investorData.isBeingPitched) return; stopRecognition(); clearInterval(investorData.pitchTimerId); clearInterval(investorData.boredomTimerId); investorData.pitchTimerId = null; investorData.boredomTimerId = null; investorData.isBeingPitched = false; investorData.hasBeenPitched = true; currentPitch = null; investorData.element.style.outline = 'none'; const faceSpan = investorData.element.querySelector('.face'); if (faceSpan) faceSpan.style.transform = 'rotateY(0deg)'; if (success) { score++; updateScoreDisplay(); showMessage(message, false); if (faceSpan) faceSpan.textContent = INVESTOR_SUCCESS_FACE; investorData.element.style.backgroundColor = '#4ade80'; setTimeout(() => removeInvestor(investorData), 1500); } else { if (isGameRunning) showMessage(message, true); if (faceSpan) faceSpan.textContent = INVESTOR_FAIL_FACE; investorData.element.style.backgroundColor = '#f87171'; setTimeout(() => removeInvestor(investorData), 2000); } setTimeout(() => { if (DOM.transcriptArea) DOM.transcriptArea.innerHTML = ''; }, 1500); }
+        // Modify endPitch function to track statistics
+        function endPitch(investorData, success, message) {
+            if (!investorData || !investorData.isBeingPitched) return;
+            stopRecognition();
+            clearInterval(investorData.pitchTimerId);
+            clearInterval(investorData.boredomTimerId);
+            investorData.pitchTimerId = null;
+            investorData.boredomTimerId = null;
+            investorData.isBeingPitched = false;
+            investorData.hasBeenPitched = true;
+            currentPitch = null;
+            investorData.element.style.outline = 'none';
+            const faceSpan = investorData.element.querySelector('.face');
+            if (faceSpan) faceSpan.style.transform = 'rotateY(0deg)';
+            
+            // Update game statistics
+            updateGameStats(currentPitchAnalysis, success);
+            
+            if (success) {
+                score++;
+                updateScoreDisplay();
+                showMessage(message, false);
+                if (faceSpan) faceSpan.textContent = INVESTOR_SUCCESS_FACE;
+                investorData.element.style.backgroundColor = '#4ade80';
+                setTimeout(() => removeInvestor(investorData), 1500);
+            } else {
+                if (isGameRunning) showMessage(message, true);
+                if (faceSpan) faceSpan.textContent = INVESTOR_FAIL_FACE;
+                investorData.element.style.backgroundColor = '#f87171';
+                setTimeout(() => removeInvestor(investorData), 2000);
+            }
+            setTimeout(() => {
+                if (DOM.transcriptArea) DOM.transcriptArea.innerHTML = '';
+            }, 1500);
+        }
         function removeInvestor(investorData) { if (investorData.pitchTimerId) clearInterval(investorData.pitchTimerId); if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId); if (investorData.element && investorData.element.parentNode === DOM.gameArea) { DOM.gameArea.removeChild(investorData.element); } investors = investors.filter(inv => inv.id !== investorData.id); if (isGameRunning && !isPaused && investors.length < MAX_INVESTORS / 2) { setTimeout(createInvestor, 1000); } }
-        function endGame() { stopRecognition(); isGameRunning = false; isPaused = false; clearInterval(gameIntervalId); clearInterval(investorSpawnIntervalId); gameIntervalId = null; investorSpawnIntervalId = null; if (currentPitch && currentPitch.isBeingPitched) { endPitch(currentPitch, false, "Game Over!"); } currentPitch = null; investors.forEach(inv => { if(inv.element) inv.element.style.cursor = 'default'; }); showMessage(`Game Over! Final Score: ${score}`, false, true); DOM.startButton.disabled = false; DOM.pauseButton.disabled = true; DOM.pauseButton.textContent = 'Pause'; DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700'); DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700'); DOM.startButton.textContent = "Play Again?"; updateMicStatus('idle'); }
+        function endGame() {
+            stopRecognition();
+            isGameRunning = false;
+            isPaused = false;
+            clearInterval(gameIntervalId);
+            clearInterval(investorSpawnIntervalId);
+            gameIntervalId = null;
+            investorSpawnIntervalId = null;
+            if (currentPitch && currentPitch.isBeingPitched) {
+                endPitch(currentPitch, false, "Game Over!");
+            }
+            currentPitch = null;
+            investors.forEach(inv => {
+                if(inv.element) inv.element.style.cursor = 'default';
+            });
+            showMessage(`Game Over! Final Score: ${score}`, false, true);
+            DOM.startButton.disabled = false;
+            DOM.pauseButton.disabled = true;
+            DOM.pauseButton.textContent = 'Pause';
+            DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700');
+            DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700');
+            DOM.startButton.textContent = "Play Again?";
+            updateMicStatus('idle');
+            
+            // Show the game summary
+            showGameSummary();
+        }
         function startGame() { console.log("Debug: startGame called."); if (isGameRunning) return; if (!rulesShown) { showRulesModal(); rulesShown = true; return; } score = 0; gameTimeRemaining = GAME_DURATION_SECONDS; isGameRunning = true; isPaused = false; currentPitch = null; updateScoreDisplay(); updateGameTimerDisplay(); DOM.startButton.disabled = true; DOM.pauseButton.disabled = false; DOM.pauseButton.textContent = 'Pause'; DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700'); DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700'); clearMessage(); updateMicStatus('idle'); clearWarning('https-warning'); clearWarning('speech-api-warning'); if (window.location.protocol !== 'https:') { console.warn("Debug: Page is not loaded over HTTPS."); showWarning('https-warning', 'Warning: Page is not HTTPS. Microphone access might be blocked by the browser.', 'https'); } else { console.log("Debug: Page is loaded over HTTPS."); } if (!isSpeechApiAvailable) { console.warn("Debug: Speech API IS NOT available."); showWarning('speech-api-warning', "Voice input not supported by browser.", 'api-error'); } else { console.log("Debug: Speech API IS available."); } investors.forEach(inv => { if (inv.element && inv.element.parentNode) inv.element.parentNode.removeChild(inv.element); }); investors = []; gameIntervalId = setInterval(() => { gameTimeRemaining--; updateGameTimerDisplay(); if (gameTimeRemaining <= 0) endGame(); }, 1000); for (let i = 0; i < MAX_INVESTORS / 2; i++) createInvestor(); investorSpawnIntervalId = setInterval(createInvestor, INVESTOR_SPAWN_INTERVAL_MS); }
         function togglePause() { if (!isGameRunning) return; isPaused = !isPaused; if (isPaused) { stopRecognition(); clearInterval(gameIntervalId); clearInterval(investorSpawnIntervalId); gameIntervalId = null; investorSpawnIntervalId = null; DOM.pauseButton.textContent = 'Resume'; DOM.pauseButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-700'); DOM.pauseButton.classList.add('bg-green-500', 'hover:bg-green-700'); showMessage('Game Paused'); } else { if (gameTimeRemaining > 0) { gameIntervalId = setInterval(() => { gameTimeRemaining--; updateGameTimerDisplay(); if (gameTimeRemaining <= 0) endGame(); }, 1000); investorSpawnIntervalId = setInterval(createInvestor, INVESTOR_SPAWN_INTERVAL_MS); DOM.pauseButton.textContent = 'Pause'; DOM.pauseButton.classList.remove('bg-green-500', 'hover:bg-green-700'); DOM.pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-700'); showMessage('Game Resumed'); } else { isPaused = true; showMessage('Cannot resume, time is up!', true); } } }
 
         // --- Event Listeners --- (Same as v1.8)
-        document.addEventListener('DOMContentLoaded', () => { console.log("Debug: DOMContentLoaded event fired."); if (!DOM.rulesModal || !DOM.closeRulesButton) { console.error("Debug: Modal elements not found!"); } else { DOM.closeRulesButton.addEventListener('click', hideRulesModal); } if(DOM.startButton) DOM.startButton.addEventListener('click', startGame); else console.error("Start button not found"); if(DOM.pauseButton) DOM.pauseButton.addEventListener('click', togglePause); else console.error("Pause button not found"); updateGameTimerDisplay(); updateScoreDisplay(); if(DOM.pauseButton) DOM.pauseButton.disabled = true; updateMicStatus('idle'); });
+        document.addEventListener('DOMContentLoaded', () => { console.log("Debug: DOMContentLoaded event fired."); if (!DOM.rulesModal || !DOM.closeRulesButton) { console.error("Debug: Modal elements not found!"); } else { DOM.closeRulesButton.addEventListener('click', hideRulesModal); } if(DOM.startButton) DOM.startButton.addEventListener('click', startGame); else console.error("Start button not found"); if(DOM.pauseButton) DOM.pauseButton.addEventListener('click', togglePause); else console.error("Pause button not found"); updateGameTimerDisplay(); updateScoreDisplay(); if(DOM.pauseButton) DOM.pauseButton.disabled = true; updateMicStatus('idle'); if (DOM.closeSummaryButton) { DOM.closeSummaryButton.addEventListener('click', () => { hideGameSummary(); startGame(); }); } });
 
     </script>
 
