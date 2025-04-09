@@ -1305,9 +1305,23 @@
                     if (timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
                     
                     if (investorData.pitchTimeLeft <= 0) {
-                        // If the investor isn't bored (boredom < 100), count it as a success
-                        const isSuccess = investorData.boredomLevel < 100;
-                        endPitch(investorData, isSuccess, isSuccess ? "Great pitch!" : "Time's up!");
+                        const transcript = DOM.transcriptArea?.textContent || '';
+                        const words = transcript.toLowerCase().split(/\s+/);
+                        const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+                        const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
+                        
+                        // Check if pitch meets quality criteria
+                        const isQualityPitch = 
+                            words.length >= MINIMUM_WORDS_FOR_SUCCESS && // Minimum word count
+                            positiveCount >= MINIMUM_BUSINESS_TERMS && // Enough business terms
+                            (negativeCount / words.length) <= MAXIMUM_FILLER_RATIO && // Not too many fillers
+                            investorData.boredomLevel < 100; // Not completely bored
+                        
+                        endPitch(investorData, isQualityPitch, 
+                            isQualityPitch ? "Great pitch!" : 
+                            words.length < MINIMUM_WORDS_FOR_SUCCESS ? "Too brief!" :
+                            positiveCount < MINIMUM_BUSINESS_TERMS ? "Need more business context!" :
+                            "Not engaging enough!");
                     }
                 }, 1000);
                 
@@ -1370,18 +1384,25 @@
             return score;
         }
 
+        // Add these constants near the other game configuration constants
+        const MINIMUM_WORDS_FOR_SUCCESS = 30; // Minimum words needed for a successful pitch
+        const MINIMUM_BUSINESS_TERMS = 3;     // Minimum number of business/positive terms needed
+        const MAXIMUM_FILLER_RATIO = 0.15;    // Maximum allowed ratio of filler words
+        const SILENCE_PENALTY = 0.5;          // How much to increase boredom during silence
+
         function startBoredomTimer(investorData) {
             if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId);
             
-            // Track silence
+            // Track silence and speech quality
             let lastTranscriptLength = 0;
             let silenceCounter = 0;
-            const SILENCE_THRESHOLD = 10; // 1 second of silence before increasing boredom
-            const GRACE_PERIOD = 30; // 3 seconds grace period at start
+            let lastWordCount = 0;
+            const SILENCE_THRESHOLD = 8; // 800ms of silence before increasing boredom
+            const GRACE_PERIOD = 20; // 2 seconds grace period at start
             let gracePeriodCounter = 0;
             
             // Set initial boredom increment to be more forgiving
-            investorData.boredomIncrementFactor = 0.1;
+            investorData.boredomIncrementFactor = 0.15;
             
             investorData.boredomTimerId = setInterval(() => {
                 if (isPaused || !investorData.isBeingPitched) return;
@@ -1393,21 +1414,36 @@
                 }
                 
                 // Check for silence by comparing transcript length
-                const currentTranscriptLength = (DOM.transcriptArea?.textContent || '').length;
-                if (currentTranscriptLength === lastTranscriptLength) {
+                const transcript = DOM.transcriptArea?.textContent || '';
+                const currentTranscriptLength = transcript.length;
+                const currentWordCount = transcript.split(/\s+/).length;
+                
+                // Detect silence or very slow speech
+                if (currentTranscriptLength === lastTranscriptLength || currentWordCount === lastWordCount) {
                     silenceCounter++;
                     if (silenceCounter >= SILENCE_THRESHOLD) {
-                        // Increase boredom more during extended silence, but more gradually
-                        investorData.boredomIncrementFactor = Math.min(0.3, investorData.boredomIncrementFactor * 1.2);
+                        // Significant increase in boredom during silence
+                        investorData.boredomLevel += SILENCE_PENALTY;
                     }
                 } else {
-                    silenceCounter = 0;
-                    // Reduce boredom increment when speaking, but maintain minimum
-                    investorData.boredomIncrementFactor = Math.max(0.1, investorData.boredomIncrementFactor / 1.2);
+                    silenceCounter = Math.max(0, silenceCounter - 2); // Reduce silence counter when speaking
+                    // Analyze speech quality in real-time
+                    const words = transcript.toLowerCase().split(/\s+/);
+                    const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+                    const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
+                    
+                    // Adjust boredom based on speech quality
+                    if (negativeCount / words.length > MAXIMUM_FILLER_RATIO) {
+                        investorData.boredomIncrementFactor = 0.3; // Increase boredom for too many fillers
+                    } else if (positiveCount >= MINIMUM_BUSINESS_TERMS) {
+                        investorData.boredomIncrementFactor = 0.1; // Reduce boredom for good content
+                    }
                 }
-                lastTranscriptLength = currentTranscriptLength;
                 
-                // Increase boredom level more gradually
+                lastTranscriptLength = currentTranscriptLength;
+                lastWordCount = currentWordCount;
+                
+                // Increase boredom level
                 investorData.boredomLevel += investorData.boredomIncrementFactor;
                 const boredomBar = investorData.element.querySelector('.boredom-bar');
                 if (boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
