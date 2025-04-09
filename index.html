@@ -830,6 +830,233 @@
             updateMicStatus('idle');
         }
 
+        function startPitch(investorData) {
+            console.log("Starting pitch...");
+            if (!isGameRunning || isPaused) {
+                showMessage("Game is not running or is paused!", true);
+                return;
+            }
+            
+            if (currentPitch) {
+                showMessage("Already pitching to another investor!", true);
+                return;
+            }
+            
+            if (investorData.hasBeenPitched) {
+                showMessage("This investor has already been pitched to!", true);
+                return;
+            }
+            
+            // Initialize pitch state
+            currentPitch = investorData;
+            investorData.isBeingPitched = true;
+            investorData.pitchTimeLeft = PITCH_DURATION_SECONDS;
+            currentTranscript = '';
+            
+            // Update UI
+            investorData.element.style.outline = '2px solid #4F46E5';
+            const faceSpan = investorData.element.querySelector('.face');
+            if (faceSpan) faceSpan.style.transform = 'rotateY(180deg)';
+            
+            // Start speech recognition
+            if (!isSpeechApiAvailable) {
+                showMessage("Speech recognition not available in this browser!", true);
+                return;
+            }
+            
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onstart = () => {
+                console.log("Speech recognition started");
+                isListening = true;
+                updateMicStatus('listening');
+                showMessage("Start your pitch now!", false);
+            };
+            
+            recognition.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+                
+                if (DOM.transcriptArea) {
+                    DOM.transcriptArea.textContent = transcript;
+                }
+                
+                // Analyze pitch in real-time
+                const words = transcript.toLowerCase().split(/\s+/);
+                const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+                const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
+                
+                // Update current pitch analysis
+                currentPitchAnalysis = {
+                    score: calculatePitchScore(positiveCount, negativeCount, words.length),
+                    words: words.length,
+                    positive: positiveCount,
+                    negative: negativeCount,
+                    duration: PITCH_DURATION_SECONDS - investorData.pitchTimeLeft
+                };
+                
+                // Update boredom factor based on analysis
+                investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
+            };
+            
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                updateMicStatus('error');
+                showMessage("Microphone error! Click the investor again to retry.", true);
+                endPitch(investorData, false, "Technical difficulties!");
+            };
+            
+            recognition.onend = () => {
+                console.log("Speech recognition ended");
+                if (isListening) {
+                    recognition.start();
+                }
+            };
+            
+            try {
+                recognition.start();
+                
+                // Start pitch timer
+                investorData.pitchTimerId = setInterval(() => {
+                    if (isPaused || !investorData.isBeingPitched) return;
+                    
+                    investorData.pitchTimeLeft--;
+                    const timerWidth = (investorData.pitchTimeLeft / PITCH_DURATION_SECONDS) * 100;
+                    const timerBar = investorData.element.querySelector('.timer-bar');
+                    if (timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
+                    
+                    if (investorData.pitchTimeLeft <= 0) {
+                        endPitch(investorData, false, "Time's up!");
+                    }
+                }, 1000);
+                
+                // Start boredom timer
+                startBoredomTimer(investorData);
+                
+            } catch (error) {
+                console.error("Error starting speech recognition:", error);
+                showMessage("Failed to start microphone! Click the investor again to retry.", true);
+                endPitch(investorData, false, "Technical difficulties!");
+            }
+        }
+
+        function calculatePitchScore(positiveCount, negativeCount, totalWords) {
+            if (totalWords < MIN_WORD_COUNT) return 0;
+            
+            const positiveRatio = positiveCount / totalWords;
+            const negativeRatio = negativeCount / totalWords;
+            
+            // Base score from 0 to 1
+            let score = Math.min(1, positiveRatio * 2) - Math.min(1, negativeRatio * 3);
+            
+            // Normalize to 0-1 range
+            score = Math.max(0, Math.min(1, (score + 1) / 2));
+            
+            return score;
+        }
+
+        function calculateBoredomFactor(analysis) {
+            // Start with base factor
+            let factor = 0.2;
+            
+            // Increase factor if using too many filler words
+            if (analysis.negative > 0) {
+                factor += 0.1 * (analysis.negative / analysis.words);
+            }
+            
+            // Decrease factor if using business terms
+            if (analysis.positive > 0) {
+                factor -= 0.05 * (analysis.positive / analysis.words);
+            }
+            
+            // Ensure factor stays within reasonable bounds
+            return Math.max(0.1, Math.min(0.5, factor));
+        }
+
+        function startBoredomTimer(investorData) {
+            if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId);
+            
+            investorData.boredomTimerId = setInterval(() => {
+                if (isPaused || !investorData.isBeingPitched) return;
+                
+                investorData.boredomLevel += investorData.boredomIncrementFactor;
+                const boredomBar = investorData.element.querySelector('.boredom-bar');
+                if (boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                
+                if (investorData.boredomLevel >= 100) {
+                    endPitch(investorData, false, "Lost interest!");
+                }
+            }, 100);
+        }
+
+        function clearAllInvestors() {
+            investors.forEach(inv => {
+                if (inv.pitchTimerId) clearInterval(inv.pitchTimerId);
+                if (inv.boredomTimerId) clearInterval(inv.boredomTimerId);
+                if (inv.element && inv.element.parentNode) {
+                    inv.element.parentNode.removeChild(inv.element);
+                }
+            });
+            investors = [];
+        }
+
+        function stopAllPitches() {
+            if (currentPitch) {
+                endPitch(currentPitch, false, "Game stopped");
+            }
+            investors.forEach(inv => {
+                if (inv.pitchTimerId) clearInterval(inv.pitchTimerId);
+                if (inv.boredomTimerId) clearInterval(inv.boredomTimerId);
+            });
+            stopRecognition();
+        }
+
+        function generateImprovementTips() {
+            const tips = [];
+            
+            if (gameStats.pitchAnalysis.tooSlow > 0) {
+                tips.push("Try to speak more quickly to engage investors better.");
+            }
+            if (gameStats.pitchAnalysis.tooFast > 0) {
+                tips.push("Slow down a bit to ensure clarity in your pitch.");
+            }
+            if (gameStats.pitchAnalysis.highFillerWords > 0) {
+                tips.push("Reduce filler words like 'um', 'uh', and 'like' to sound more confident.");
+            }
+            if (gameStats.pitchAnalysis.lowKeywordDensity > 0) {
+                tips.push("Include more business terms and industry keywords in your pitch.");
+            }
+            if (gameStats.pitchAnalysis.repetitivePhrases > 0) {
+                tips.push("Vary your vocabulary to keep investors engaged.");
+            }
+            if (gameStats.pitchAnalysis.consecutiveFillers > 0) {
+                tips.push("Work on smoother transitions between ideas to avoid consecutive filler words.");
+            }
+            
+            // Add general tips if needed
+            if (tips.length === 0) {
+                tips.push("Great job! Keep practicing to maintain your pitch quality.");
+                tips.push("Try increasing your pitch speed to reach more investors.");
+            }
+            
+            // Add tips to the DOM
+            tips.forEach(tip => {
+                const li = document.createElement('li');
+                li.textContent = tip;
+                DOM.improvementTips.appendChild(li);
+            });
+        }
+
+        function hideGameSummary() {
+            if (DOM.summaryModal) {
+                DOM.summaryModal.classList.add('hidden');
+            }
+        }
+
         // --- Event Listeners --- (Same as v1.8)
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Debug: DOMContentLoaded event fired.");
