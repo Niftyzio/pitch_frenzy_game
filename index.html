@@ -213,7 +213,8 @@
         }
 
         .modal-content {
-            background: transparent !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #1a1c2c !important;
         }
 
         .mic-status {
@@ -267,6 +268,92 @@
             border-radius: 2px;
             transition: width 0.3s ease;
         }
+
+        .performance-stats, .improvement-tips {
+            color: #1a1c2c !important;
+        }
+
+        #performance-stats li, #improvement-tips li {
+            color: #374151 !important;
+            margin-bottom: 0.5rem;
+        }
+
+        .text-primary {
+            color: #4F46E5 !important;
+        }
+
+        .text-secondary {
+            color: #34D399 !important;
+        }
+
+        #message-area {
+            color: white !important;
+            font-size: 1.25rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #transcript-area {
+            color: #E5E7EB !important;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .stats-container {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .stat-item {
+            color: white !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .timer {
+            color: #93C5FD !important;
+        }
+
+        .score {
+            color: #6EE7B7 !important;
+        }
+
+        #ai-feedback-container {
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transform: translateY(100%);
+            transition: transform 0.3s ease-out;
+            z-index: 50;
+        }
+
+        #ai-feedback-container.active {
+            transform: translateY(0);
+        }
+
+        #ai-feedback li {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            background: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.5rem;
+            border-left: 4px solid;
+        }
+
+        #ai-feedback li.positive {
+            border-color: #34D399;
+            background: rgba(52, 211, 153, 0.1);
+        }
+
+        #ai-feedback li.warning {
+            border-color: #F59E0B;
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        #ai-feedback li.negative {
+            border-color: #EF4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -301,6 +388,12 @@
         <div id="message-area" class="mt-4 text-center text-lg font-medium"></div>
         <div id="transcript-area" class="mt-2 text-center text-gray-600"></div>
         <div id="warning-area" class="mt-2"></div>
+        
+        <!-- AI Feedback Display -->
+        <div id="ai-feedback-container" class="fixed bottom-4 left-4 bg-white bg-opacity-95 p-4 rounded-xl shadow-lg max-w-md">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">AI Speech Analysis</h3>
+            <ul id="ai-feedback" class="space-y-2 text-gray-600"></ul>
+        </div>
     </div>
 
     <!-- Rules Modal -->
@@ -413,9 +506,121 @@
         // --- Game Configuration & State ---
         const GAME_DURATION_SECONDS = 180; // 3 minutes
         const PITCH_DURATION_SECONDS = 30;
-        const MAX_INVESTORS = 12; // Increased from 8 to 12
-        const INVESTOR_SPAWN_INTERVAL_MS = 3000; // Decreased from 5000 to 3000ms
+        const MAX_INVESTORS = 12;
+        const INVESTOR_SPAWN_INTERVAL_MS = 3000;
         const VOICE_LISTEN_DURATION_MS = 10000;
+
+        // Dynamic difficulty configuration
+        const DIFFICULTY_SCALING = {
+            timeThresholds: [
+                { remaining: 180, multiplier: 1.0 },    // Start of game
+                { remaining: 120, multiplier: 1.2 },    // 2 minutes left
+                { remaining: 60, multiplier: 1.5 },     // 1 minute left
+                { remaining: 30, multiplier: 2.0 }      // 30 seconds left
+            ],
+            baseBoredomRate: 0.2,
+            maxBoredomRate: 0.8
+        };
+
+        // Context keywords for better pitch analysis
+        const CONTEXT_KEYWORDS = {
+            problem: ["pain point", "challenge", "need", "issue", "difficulty", "gap", "inefficiency"],
+            solution: ["solve", "improve", "enhance", "optimize", "streamline", "revolutionize"],
+            market: ["target audience", "demographic", "market size", "opportunity", "segment"],
+            business: ["revenue", "profit", "monetization", "business model", "pricing"],
+            competition: ["competitor", "alternative", "unique", "differentiate", "advantage"],
+            traction: ["users", "customers", "growth", "adoption", "retention"],
+            team: ["experience", "expertise", "background", "skilled", "passionate"]
+        };
+
+        // Add to existing pitch analysis
+        function analyzePitchContext(transcript) {
+            const contextScores = {};
+            const words = transcript.toLowerCase().split(/\s+/);
+            
+            // Score each context category
+            for (const [category, keywords] of Object.entries(CONTEXT_KEYWORDS)) {
+                contextScores[category] = keywords.reduce((score, keyword) => {
+                    const regex = new RegExp(keyword, 'gi');
+                    const matches = transcript.match(regex) || [];
+                    return score + matches.length;
+                }, 0);
+            }
+            
+            // Calculate completeness of pitch
+            const coveredCategories = Object.values(contextScores).filter(score => score > 0).length;
+            const completenessScore = coveredCategories / Object.keys(CONTEXT_KEYWORDS).length;
+            
+            return {
+                contextScores,
+                completenessScore,
+                missingElements: Object.entries(contextScores)
+                    .filter(([_, score]) => score === 0)
+                    .map(([category]) => category)
+            };
+        }
+
+        function calculateBoredomFactor(analysis) {
+            // Get current difficulty multiplier based on time remaining
+            const currentMultiplier = DIFFICULTY_SCALING.timeThresholds.reduce((mult, threshold) => {
+                return gameTimeLeft <= threshold.remaining ? threshold.multiplier : mult;
+            }, 1.0);
+            
+            // Start with base factor
+            let factor = DIFFICULTY_SCALING.baseBoredomRate * currentMultiplier;
+            
+            // Analyze context and adjust factor
+            if (analysis.words > 0) {
+                const contextAnalysis = analyzePitchContext(DOM.transcriptArea.textContent || '');
+                
+                // Reduce boredom if pitch is more complete
+                factor *= (1 - contextAnalysis.completenessScore * 0.3);
+                
+                // Increase factor if using too many filler words
+                if (analysis.negative > 0) {
+                    factor += 0.1 * (analysis.negative / analysis.words) * currentMultiplier;
+                }
+                
+                // Decrease factor if using business terms effectively
+                if (analysis.positive > 0) {
+                    factor -= 0.05 * (analysis.positive / analysis.words);
+                }
+            }
+            
+            // Ensure factor stays within reasonable bounds, scaled by current difficulty
+            const maxRate = DIFFICULTY_SCALING.maxBoredomRate * currentMultiplier;
+            return Math.max(0.1, Math.min(maxRate, factor));
+        }
+
+        // Update the feedback display to show context analysis
+        function updateFeedbackDisplay(analysis) {
+            const feedbackIndicator = document.getElementById('feedbackIndicator');
+            if (!feedbackIndicator) return;
+            
+            const contextAnalysis = analyzePitchContext(DOM.transcriptArea.textContent || '');
+            const missingContext = contextAnalysis.missingElements;
+            
+            feedbackIndicator.classList.remove('hidden');
+            
+            // Show real-time feedback based on context
+            let feedback = '';
+            if (missingContext.length > 0) {
+                feedback = `Try addressing: ${missingContext.join(', ')}`;
+            } else if (contextAnalysis.completenessScore < 0.5) {
+                feedback = "Expand on your key points";
+            } else if (analysis.negative > analysis.positive) {
+                feedback = "Use more business terms, fewer filler words";
+            } else {
+                feedback = "Good pitch structure!";
+            }
+            
+            const realTimeFeedback = document.getElementById('realTimeFeedback');
+            if (realTimeFeedback) {
+                realTimeFeedback.textContent = feedback;
+                realTimeFeedback.className = contextAnalysis.completenessScore > 0.7 ? "success" : "warning";
+            }
+        }
+
         const DOM = {
             gameTimer: document.getElementById('game-timer'),
             scoreDisplay: document.getElementById('score'),
@@ -869,6 +1074,137 @@
             updateMicStatus('idle');
         }
 
+        // Advanced AI Voice Analysis Configuration
+        const VOICE_ANALYSIS = {
+            sentiment: {
+                positive: ["confident", "enthusiastic", "professional"],
+                negative: ["uncertain", "monotone", "hesitant"]
+            },
+            clarity: {
+                minWordsPerMinute: 120,
+                maxWordsPerMinute: 160,
+                optimalPauseDuration: 0.5 // seconds
+            },
+            tone: {
+                pitchRange: {
+                    min: 75,  // Hz
+                    max: 300  // Hz
+                },
+                volumeRange: {
+                    min: -30, // dB
+                    max: -10  // dB
+                }
+            },
+            semantics: {
+                structureElements: ["introduction", "problem", "solution", "market", "ask"],
+                transitionPhrases: ["moreover", "however", "specifically", "in addition", "therefore"]
+            }
+        };
+
+        // Enhanced pitch analysis with AI features
+        async function analyzeVoiceWithAI(audioData, transcript) {
+            try {
+                // Create AudioContext for real-time audio analysis
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(audioData);
+                source.connect(analyser);
+
+                // Analyze voice characteristics
+                const voiceMetrics = await analyzeVoiceMetrics(analyser);
+                
+                // Analyze speech patterns
+                const speechPatterns = analyzeSpeechPatterns(transcript);
+                
+                // Calculate confidence score
+                const confidenceScore = calculateConfidenceScore(voiceMetrics, speechPatterns);
+                
+                return {
+                    metrics: voiceMetrics,
+                    patterns: speechPatterns,
+                    confidence: confidenceScore
+                };
+            } catch (error) {
+                console.error("Error in AI voice analysis:", error);
+                return null;
+            }
+        }
+
+        function analyzeVoiceMetrics(analyser) {
+            return new Promise((resolve) => {
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Float32Array(bufferLength);
+                
+                analyser.getFloatTimeDomainData(dataArray);
+                
+                // Calculate voice metrics
+                const metrics = {
+                    pitch: calculatePitch(dataArray),
+                    volume: calculateVolume(dataArray),
+                    clarity: calculateClarity(dataArray),
+                    rhythm: analyzeRhythm(dataArray)
+                };
+                
+                resolve(metrics);
+            });
+        }
+
+        function analyzeSpeechPatterns(transcript) {
+            const words = transcript.toLowerCase().split(/\s+/);
+            const patterns = {
+                pacing: calculatePacing(words),
+                structure: analyzeStructure(transcript),
+                transitions: findTransitions(transcript),
+                emphasis: detectEmphasis(transcript)
+            };
+            
+            return patterns;
+        }
+
+        function calculateConfidenceScore(metrics, patterns) {
+            let score = 0;
+            
+            // Voice metrics scoring (0-40 points)
+            if (metrics) {
+                // Pitch variation (0-10 points)
+                const pitchScore = Math.min(10, 
+                    (metrics.pitch.variation / VOICE_ANALYSIS.tone.pitchRange.max) * 10
+                );
+                score += pitchScore;
+                
+                // Volume control (0-10 points)
+                const volumeScore = Math.min(10,
+                    ((metrics.volume - VOICE_ANALYSIS.tone.volumeRange.min) / 
+                    (VOICE_ANALYSIS.tone.volumeRange.max - VOICE_ANALYSIS.tone.volumeRange.min)) * 10
+                );
+                score += volumeScore;
+                
+                // Clarity (0-10 points)
+                score += metrics.clarity * 10;
+                
+                // Rhythm (0-10 points)
+                score += metrics.rhythm * 10;
+            }
+            
+            // Speech patterns scoring (0-60 points)
+            if (patterns) {
+                // Pacing (0-15 points)
+                score += patterns.pacing * 15;
+                
+                // Structure (0-15 points)
+                score += patterns.structure * 15;
+                
+                // Transitions (0-15 points)
+                score += patterns.transitions * 15;
+                
+                // Emphasis (0-15 points)
+                score += patterns.emphasis * 15;
+            }
+            
+            return Math.min(100, score) / 100; // Normalize to 0-1
+        }
+
+        // Update the startPitch function to use AI analysis
         function startPitch(investorData) {
             console.log("Starting pitch...");
             
@@ -899,7 +1235,7 @@
                     showMessage("Start your pitch now!", false);
                 };
                 
-                recognition.onresult = (event) => {
+                recognition.onresult = async (event) => {
                     const transcript = Array.from(event.results)
                         .map(result => result[0].transcript)
                         .join('');
@@ -908,21 +1244,33 @@
                         DOM.transcriptArea.textContent = transcript;
                     }
                     
-                    // Analyze pitch in real-time
+                    // Get audio stream for AI analysis
+                    if (recognition.audioStream) {
+                        const aiAnalysis = await analyzeVoiceWithAI(recognition.audioStream, transcript);
+                        if (aiAnalysis) {
+                            // Update boredom factor based on AI analysis
+                            const aiConfidenceBonus = aiAnalysis.confidence * 0.3; // Up to 30% reduction in boredom
+                            investorData.boredomIncrementFactor *= (1 - aiConfidenceBonus);
+                            
+                            // Update feedback display with AI insights
+                            updateAIFeedback(aiAnalysis);
+                        }
+                    }
+                    
+                    // Existing pitch analysis code...
                     const words = transcript.toLowerCase().split(/\s+/);
                     const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
                     const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
                     
-                    // Update current pitch analysis
                     currentPitchAnalysis = {
                         score: calculatePitchScore(positiveCount, negativeCount, words.length),
                         words: words.length,
                         positive: positiveCount,
                         negative: negativeCount,
-                        duration: PITCH_DURATION_SECONDS - investorData.pitchTimeLeft
+                        duration: PITCH_DURATION_SECONDS - investorData.pitchTimeLeft,
+                        aiMetrics: aiAnalysis
                     };
                     
-                    // Update boredom factor based on analysis
                     investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
                 };
                 
@@ -970,6 +1318,40 @@
             }
         }
 
+        function updateAIFeedback(aiAnalysis) {
+            const feedbackArea = document.getElementById('ai-feedback');
+            if (!feedbackArea) return;
+            
+            const metrics = aiAnalysis.metrics;
+            const patterns = aiAnalysis.patterns;
+            
+            let feedback = [];
+            
+            // Voice quality feedback
+            if (metrics.pitch.variation < VOICE_ANALYSIS.tone.pitchRange.min) {
+                feedback.push("Try varying your tone more to engage the investor");
+            }
+            if (metrics.volume < VOICE_ANALYSIS.tone.volumeRange.min) {
+                feedback.push("Speak up a bit to show confidence");
+            }
+            if (metrics.clarity < 0.7) {
+                feedback.push("Focus on clear pronunciation");
+            }
+            
+            // Speech pattern feedback
+            if (patterns.pacing < 0.6) {
+                feedback.push("Adjust your speaking pace - aim for 120-160 words per minute");
+            }
+            if (patterns.structure < 0.5) {
+                feedback.push("Structure your pitch with clear sections");
+            }
+            if (patterns.transitions < 0.4) {
+                feedback.push("Use transition phrases to connect your ideas");
+            }
+            
+            feedbackArea.innerHTML = feedback.map(f => `<li>${f}</li>`).join('');
+        }
+
         function calculatePitchScore(positiveCount, negativeCount, totalWords) {
             if (totalWords < MIN_WORD_COUNT) return 0;
             
@@ -983,24 +1365,6 @@
             score = Math.max(0, Math.min(1, (score + 1) / 2));
             
             return score;
-        }
-
-        function calculateBoredomFactor(analysis) {
-            // Start with base factor
-            let factor = 0.2;
-            
-            // Increase factor if using too many filler words
-            if (analysis.negative > 0) {
-                factor += 0.1 * (analysis.negative / analysis.words);
-            }
-            
-            // Decrease factor if using business terms
-            if (analysis.positive > 0) {
-                factor -= 0.05 * (analysis.positive / analysis.words);
-            }
-            
-            // Ensure factor stays within reasonable bounds
-            return Math.max(0.1, Math.min(0.5, factor));
         }
 
         function startBoredomTimer(investorData) {
@@ -1185,29 +1549,6 @@
             console.log("Investor created. Total investors:", investors.length);
         }
 
-        function updateFeedbackDisplay(analysis) {
-            const feedbackIndicator = document.getElementById('feedbackIndicator');
-            const pitchScore = document.getElementById('pitchScore');
-            const businessTerms = document.getElementById('businessTerms');
-            const realTimeFeedback = document.getElementById('realTimeFeedback');
-            
-            feedbackIndicator.classList.remove('hidden');
-            pitchScore.textContent = analysis.score.toFixed(1);
-            businessTerms.textContent = analysis.businessTerms;
-            
-            // Show real-time feedback
-            if (analysis.hesitationCount > 2) {
-                realTimeFeedback.textContent = "Try to reduce filler words";
-                realTimeFeedback.className = "warning";
-            } else if (analysis.businessTerms < 2) {
-                realTimeFeedback.textContent = "Include more business terms";
-                realTimeFeedback.className = "warning";
-            } else {
-                realTimeFeedback.textContent = "Good flow!";
-                realTimeFeedback.className = "success";
-            }
-        }
-
         function copyShareMessage() {
             const shareMessage = document.getElementById('share-message');
             if (shareMessage) {
@@ -1227,6 +1568,173 @@
                         console.error('Failed to copy text: ', err);
                     });
             }
+        }
+
+        function calculatePitch(audioData) {
+            // Implement autocorrelation for pitch detection
+            const correlations = new Float32Array(audioData.length);
+            let maxCorrelation = 0;
+            let foundPitch = 0;
+            
+            for (let lag = 0; lag < correlations.length; lag++) {
+                let correlation = 0;
+                for (let i = 0; i < correlations.length - lag; i++) {
+                    correlation += audioData[i] * audioData[i + lag];
+                }
+                correlations[lag] = correlation;
+                
+                if (correlation > maxCorrelation) {
+                    maxCorrelation = correlation;
+                    foundPitch = lag;
+                }
+            }
+            
+            return {
+                frequency: 44100 / foundPitch, // Sample rate / lag
+                variation: calculateVariation(correlations)
+            };
+        }
+
+        function calculateVolume(audioData) {
+            // Calculate RMS volume
+            const sum = audioData.reduce((acc, val) => acc + val * val, 0);
+            const rms = Math.sqrt(sum / audioData.length);
+            return 20 * Math.log10(rms); // Convert to dB
+        }
+
+        function calculateClarity(audioData) {
+            // Analyze signal-to-noise ratio and spectral flatness
+            let sumSquares = 0;
+            let sumMagnitude = 0;
+            
+            for (let i = 0; i < audioData.length; i++) {
+                sumSquares += audioData[i] * audioData[i];
+                sumMagnitude += Math.abs(audioData[i]);
+            }
+            
+            const rms = Math.sqrt(sumSquares / audioData.length);
+            const average = sumMagnitude / audioData.length;
+            
+            // Calculate crest factor (peak-to-RMS ratio)
+            const peakValue = Math.max(...audioData.map(Math.abs));
+            const crestFactor = peakValue / rms;
+            
+            // Normalize to 0-1 range
+            return Math.min(1, Math.max(0, (crestFactor - 1) / 4));
+        }
+
+        function analyzeRhythm(audioData) {
+            // Analyze speech rhythm using energy envelope
+            const frameSize = 1024;
+            const hopSize = 512;
+            const numFrames = Math.floor((audioData.length - frameSize) / hopSize);
+            const energyEnvelope = new Float32Array(numFrames);
+            
+            // Calculate energy envelope
+            for (let i = 0; i < numFrames; i++) {
+                let sum = 0;
+                for (let j = 0; j < frameSize; j++) {
+                    sum += audioData[i * hopSize + j] * audioData[i * hopSize + j];
+                }
+                energyEnvelope[i] = sum / frameSize;
+            }
+            
+            // Find peaks in energy envelope (syllables)
+            const peaks = findPeaks(energyEnvelope);
+            
+            // Calculate rhythm regularity
+            const intervals = [];
+            for (let i = 1; i < peaks.length; i++) {
+                intervals.push(peaks[i] - peaks[i - 1]);
+            }
+            
+            // Calculate coefficient of variation of intervals
+            const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            const variance = intervals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / intervals.length;
+            const cv = Math.sqrt(variance) / mean;
+            
+            // Convert to rhythm score (0-1)
+            return Math.max(0, Math.min(1, 1 - cv));
+        }
+
+        function calculatePacing(words) {
+            const duration = PITCH_DURATION_SECONDS;
+            const wordsPerMinute = (words.length / duration) * 60;
+            
+            // Score based on target range (120-160 WPM)
+            if (wordsPerMinute < VOICE_ANALYSIS.clarity.minWordsPerMinute) {
+                return wordsPerMinute / VOICE_ANALYSIS.clarity.minWordsPerMinute;
+            } else if (wordsPerMinute > VOICE_ANALYSIS.clarity.maxWordsPerMinute) {
+                return 1 - ((wordsPerMinute - VOICE_ANALYSIS.clarity.maxWordsPerMinute) / 
+                          VOICE_ANALYSIS.clarity.maxWordsPerMinute);
+            }
+            return 1.0;
+        }
+
+        function analyzeStructure(transcript) {
+            let score = 0;
+            const elements = VOICE_ANALYSIS.semantics.structureElements;
+            
+            // Check for presence of each structural element
+            elements.forEach(element => {
+                const regex = new RegExp(`\\b${element}\\b|\\b${element}s\\b|\\b${element}ing\\b`, 'i');
+                if (regex.test(transcript)) {
+                    score += 1 / elements.length;
+                }
+            });
+            
+            return score;
+        }
+
+        function findTransitions(transcript) {
+            let score = 0;
+            const phrases = VOICE_ANALYSIS.semantics.transitionPhrases;
+            
+            // Count transition phrases
+            phrases.forEach(phrase => {
+                const regex = new RegExp(`\\b${phrase}\\b`, 'gi');
+                const matches = transcript.match(regex) || [];
+                score += matches.length * (1 / phrases.length);
+            });
+            
+            return Math.min(1, score);
+        }
+
+        function detectEmphasis(transcript) {
+            // Analyze sentence structure and punctuation
+            const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
+            let score = 0;
+            
+            sentences.forEach(sentence => {
+                // Check for emphasis patterns
+                if (/^(what|how|why|when|where|who)\b/i.test(sentence)) score += 0.2;
+                if (/!/g.test(sentence)) score += 0.15;
+                if (/\b(most|best|key|critical|essential|crucial|vital)\b/i.test(sentence)) score += 0.1;
+                if (/\b(imagine|consider|think about)\b/i.test(sentence)) score += 0.1;
+            });
+            
+            return Math.min(1, score);
+        }
+
+        function findPeaks(array) {
+            const peaks = [];
+            const threshold = 0.1;
+            
+            for (let i = 1; i < array.length - 1; i++) {
+                if (array[i] > threshold && 
+                    array[i] > array[i-1] && 
+                    array[i] > array[i+1]) {
+                    peaks.push(i);
+                }
+            }
+            
+            return peaks;
+        }
+
+        function calculateVariation(array) {
+            const mean = array.reduce((a, b) => a + b, 0) / array.length;
+            const variance = array.reduce((a, b) => a + (b - mean) * (b - mean), 0) / array.length;
+            return Math.sqrt(variance) / mean;
         }
 
     </script>
