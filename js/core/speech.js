@@ -130,4 +130,80 @@ function handleSpeechEnd(investorData) {
 export const speechState = {
     isListening,
     recognition
-}; 
+};
+
+function startBoredomTimer(investorData) {
+    if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId);
+    
+    // Track silence and speech quality
+    let lastTranscriptLength = 0;
+    let silenceCounter = 0;
+    let lastWordCount = 0;
+    const SILENCE_THRESHOLD = 10; // 1 second of silence before penalties
+    let gracePeriodCounter = 0;
+    
+    // Set initial boredom increment to base rate
+    investorData.boredomIncrementFactor = BOREDOM_CONFIG.BASE_INCREMENT;
+    
+    investorData.boredomTimerId = setInterval(() => {
+        if (isPaused || !investorData.isBeingPitched) return;
+        
+        // Grace period at the start
+        if (gracePeriodCounter * 100 < BOREDOM_CONFIG.INITIAL_GRACE_PERIOD_MS) {
+            gracePeriodCounter++;
+            return;
+        }
+        
+        // Check for silence by comparing transcript length
+        const transcript = DOM.transcriptArea?.textContent || '';
+        const currentTranscriptLength = transcript.length;
+        const currentWordCount = transcript.split(/\s+/).length;
+        
+        // Detect silence or very slow speech
+        if (currentTranscriptLength === lastTranscriptLength || currentWordCount === lastWordCount) {
+            silenceCounter++;
+            if (silenceCounter >= SILENCE_THRESHOLD) {
+                // Apply silence penalty gradually
+                investorData.boredomLevel += BOREDOM_CONFIG.SILENCE_PENALTY * (silenceCounter - SILENCE_THRESHOLD) / 10;
+            }
+        } else {
+            silenceCounter = Math.max(0, silenceCounter - 2); // Reduce silence counter when speaking
+            // Analyze speech quality in real-time
+            const words = transcript.toLowerCase().split(/\s+/);
+            const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+            const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
+            
+            // Adjust boredom based on speech quality
+            if (negativeCount / words.length > REQUIREMENTS.MAX_FILLER_RATIO) {
+                investorData.boredomIncrementFactor = Math.min(
+                    BOREDOM_CONFIG.MAX_BOREDOM_RATE,
+                    investorData.boredomIncrementFactor + BOREDOM_CONFIG.FILLER_PENALTY
+                );
+            } else if (positiveCount > 0) {
+                // Reduce boredom for good content
+                investorData.boredomIncrementFactor = Math.max(
+                    BOREDOM_CONFIG.BASE_INCREMENT / 2,
+                    investorData.boredomIncrementFactor - BOREDOM_CONFIG.GOOD_CONTENT_BONUS
+                );
+            }
+        }
+        
+        lastTranscriptLength = currentTranscriptLength;
+        lastWordCount = currentWordCount;
+        
+        // Apply boredom increment with recovery chance
+        if (Math.random() > 0.8) { // 20% chance to slightly recover attention
+            investorData.boredomLevel = Math.max(0, investorData.boredomLevel - 0.1);
+        } else {
+            investorData.boredomLevel += investorData.boredomIncrementFactor;
+        }
+        
+        // Update boredom bar
+        const boredomBar = investorData.element.querySelector('.boredom-bar');
+        if (boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+        
+        if (investorData.boredomLevel >= 100) {
+            endPitch(investorData, false, "Lost interest!");
+        }
+    }, 100);
+} 

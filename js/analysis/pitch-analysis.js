@@ -8,13 +8,13 @@ const SCORING_WEIGHTS = {
 
 // Minimum requirements for a decent pitch
 const REQUIREMENTS = {
-    MIN_WORDS: 30,
-    MIN_BUSINESS_TERMS: 3,
-    MAX_FILLER_RATIO: 0.15,
-    MIN_PITCH_DURATION: 15, // seconds
+    MIN_WORDS: 30,               // Back to original minimum
+    MIN_BUSINESS_TERMS: 3,       // Back to original minimum
+    MAX_FILLER_RATIO: 0.2,      // Keeping more forgiving filler ratio
+    MIN_PITCH_DURATION: 15,     // Half of total pitch duration
     OPTIMAL_WORDS_PER_MINUTE: {
-        MIN: 120,
-        MAX: 160
+        MIN: 100,              // Keeping lower minimum pace
+        MAX: 160              // Keeping same maximum pace
     }
 };
 

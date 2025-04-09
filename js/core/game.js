@@ -1,3 +1,20 @@
+// Game Configuration Constants
+const GAME_DURATION_SECONDS = 180;  // 3 minutes total game time
+const PITCH_DURATION_SECONDS = 30;  // Back to 30 seconds
+const MAX_INVESTORS = 12;
+const INVESTOR_SPAWN_INTERVAL_MS = 4000;  // Slightly slower investor spawning
+const VOICE_LISTEN_DURATION_MS = 10000;
+
+// Boredom configuration
+const BOREDOM_CONFIG = {
+    BASE_INCREMENT: 0.05,          // Reduced base increment for more forgiveness
+    SILENCE_PENALTY: 0.2,          // Reduced silence penalty
+    FILLER_PENALTY: 0.15,         // Reduced filler word penalty
+    GOOD_CONTENT_BONUS: 0.08,     // Increased bonus for good content
+    INITIAL_GRACE_PERIOD_MS: 3000, // 3 second grace period at start
+    MAX_BOREDOM_RATE: 0.4         // Lower cap on maximum boredom rate
+};
+
 // Game state
 let isGameRunning = false;
 let gameTimeLeft = GAME_DURATION_SECONDS;
