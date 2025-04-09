@@ -871,93 +871,79 @@
 
         function startPitch(investorData) {
             console.log("Starting pitch...");
-            if (!isGameRunning || isPaused) {
-                showMessage("Game is not running or is paused!", true);
-                return;
-            }
-            
-            if (currentPitch) {
-                showMessage("Already pitching to another investor!", true);
-                return;
-            }
-            
-            if (investorData.hasBeenPitched) {
-                showMessage("This investor has already been pitched to!", true);
-                return;
-            }
             
             // Initialize pitch state
             currentPitch = investorData;
             investorData.isBeingPitched = true;
             investorData.pitchTimeLeft = PITCH_DURATION_SECONDS;
             currentTranscript = '';
+            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 };
             
             // Update UI
             investorData.element.style.outline = '2px solid #4F46E5';
             const faceSpan = investorData.element.querySelector('.face');
             if (faceSpan) faceSpan.style.transform = 'rotateY(180deg)';
             
-            // Start speech recognition
-            if (!isSpeechApiAvailable) {
-                showMessage("Speech recognition not available in this browser!", true);
-                return;
-            }
-            
-            recognition = initializeSpeechRecognition();
-            if (!recognition) {
-                showMessage("Failed to initialize speech recognition. Please check your browser settings.", true);
-                return;
-            }
-            
-            recognition.onstart = () => {
-                console.log("Speech recognition started");
-                isListening = true;
-                updateMicStatus('listening');
-                showMessage("Start your pitch now!", false);
-            };
-            
-            recognition.onresult = (event) => {
-                const transcript = Array.from(event.results)
-                    .map(result => result[0].transcript)
-                    .join('');
+            // Initialize speech recognition
+            try {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                recognition.maxAlternatives = 1;
                 
-                if (DOM.transcriptArea) {
-                    DOM.transcriptArea.textContent = transcript;
-                }
-                
-                // Analyze pitch in real-time
-                const words = transcript.toLowerCase().split(/\s+/);
-                const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
-                const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
-                
-                // Update current pitch analysis
-                currentPitchAnalysis = {
-                    score: calculatePitchScore(positiveCount, negativeCount, words.length),
-                    words: words.length,
-                    positive: positiveCount,
-                    negative: negativeCount,
-                    duration: PITCH_DURATION_SECONDS - investorData.pitchTimeLeft
+                recognition.onstart = () => {
+                    console.log("Speech recognition started");
+                    isListening = true;
+                    updateMicStatus('listening');
+                    showMessage("Start your pitch now!", false);
                 };
                 
-                // Update boredom factor based on analysis
-                investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
-            };
-            
-            recognition.onerror = (event) => {
-                console.error("Speech recognition error:", event.error);
-                updateMicStatus('error');
-                showMessage("Microphone error! Click the investor again to retry.", true);
-                endPitch(investorData, false, "Technical difficulties!");
-            };
-            
-            recognition.onend = () => {
-                console.log("Speech recognition ended");
-                if (isListening) {
-                    recognition.start();
-                }
-            };
-            
-            try {
+                recognition.onresult = (event) => {
+                    const transcript = Array.from(event.results)
+                        .map(result => result[0].transcript)
+                        .join('');
+                    
+                    if (DOM.transcriptArea) {
+                        DOM.transcriptArea.textContent = transcript;
+                    }
+                    
+                    // Analyze pitch in real-time
+                    const words = transcript.toLowerCase().split(/\s+/);
+                    const positiveCount = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+                    const negativeCount = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
+                    
+                    // Update current pitch analysis
+                    currentPitchAnalysis = {
+                        score: calculatePitchScore(positiveCount, negativeCount, words.length),
+                        words: words.length,
+                        positive: positiveCount,
+                        negative: negativeCount,
+                        duration: PITCH_DURATION_SECONDS - investorData.pitchTimeLeft
+                    };
+                    
+                    // Update boredom factor based on analysis
+                    investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
+                };
+                
+                recognition.onerror = (event) => {
+                    console.error("Speech recognition error:", event.error);
+                    updateMicStatus('error');
+                    showMessage("Microphone error! Click the investor again to retry.", true);
+                    endPitch(investorData, false, "Technical difficulties!");
+                };
+                
+                recognition.onend = () => {
+                    console.log("Speech recognition ended");
+                    if (isListening && currentPitch === investorData) {
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.error("Error restarting recognition:", e);
+                        }
+                    }
+                };
+                
                 recognition.start();
                 
                 // Start pitch timer
@@ -1150,7 +1136,8 @@
                 boredomLevel: 0,
                 pitchTimerId: null,
                 boredomTimerId: null,
-                boredomIncrementFactor: 0.2
+                boredomIncrementFactor: 0.2,
+                pitchTimeLeft: PITCH_DURATION_SECONDS
             };
             
             // Use the correct class name 'investor' instead of 'character'
@@ -1172,7 +1159,27 @@
                 <span class="face">${INVESTOR_DEFAULT_FACE}</span>
             `;
             
-            investorData.element.addEventListener('click', () => startPitch(investorData));
+            // Add click event listener with proper binding
+            investorData.element.onclick = () => {
+                if (!isGameRunning) {
+                    showMessage("Game is not running!", true);
+                    return;
+                }
+                if (isPaused) {
+                    showMessage("Game is paused!", true);
+                    return;
+                }
+                if (investorData.hasBeenPitched) {
+                    showMessage("This investor has already been pitched to!", true);
+                    return;
+                }
+                if (currentPitch) {
+                    showMessage("Already pitching to another investor!", true);
+                    return;
+                }
+                startPitch(investorData);
+            };
+            
             DOM.gameArea.appendChild(investorData.element);
             investors.push(investorData);
             console.log("Investor created. Total investors:", investors.length);
