@@ -473,66 +473,118 @@
             console.log("Debug: startPitch called.");
             if (!isGameRunning || isPaused || isListening || investorData.isBeingPitched || investorData.hasBeenPitched || currentPitch) { return; }
 
-            currentPitch = investorData; investorData.isBeingPitched = true; investorData.element.style.outline = '3px solid blue';
+            currentPitch = investorData;
+            investorData.isBeingPitched = true;
+            investorData.element.style.outline = '3px solid blue';
             // Reset pitch analysis state for this investor
-            investorData.boredomIncrementFactor = 0.15; // Default to fast boredom until analysis (was 0.2)
+            investorData.boredomIncrementFactor = 0.15;
             investorData.pitchScore = 0;
-            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: investorData.boredomIncrementFactor }; // Reset global tracker
+            investorData.pitchTimeLeft = PITCH_DURATION_SECONDS; // Initialize the timer to 30 seconds
+            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: investorData.boredomIncrementFactor };
 
             clearMessage();
 
             // Start 30s Pitch Timer
             const timerBar = investorData.element.querySelector('.timer-bar');
-            investorData.pitchTimerId = setInterval(() => { if (isPaused || !investorData.isBeingPitched) return; investorData.pitchTimeLeft--; const timerWidth = (investorData.pitchTimeLeft / PITCH_DURATION_SECONDS) * 100; if(timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`; if (investorData.pitchTimeLeft <= 0) { if (investorData.isBeingPitched) endPitch(investorData, false, "Time's up!"); } }, 1000);
+            if(timerBar) timerBar.style.width = '100%';
+            
+            investorData.pitchTimerId = setInterval(() => {
+                if (isPaused || !investorData.isBeingPitched) return;
+                investorData.pitchTimeLeft--;
+                const timerWidth = (investorData.pitchTimeLeft / PITCH_DURATION_SECONDS) * 100;
+                if(timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
+                
+                // End pitch if time runs out
+                if (investorData.pitchTimeLeft <= 0) {
+                    endPitch(investorData, false, "Time's up!");
+                }
+            }, 1000);
 
             // Handle Voice Input
             if (isSpeechApiAvailable) {
                 console.log("Debug: Speech API is available, attempting to start recognition.");
-                showMessage("Pitch Now!"); updateMicStatus('listening'); isListening = true; DOM.transcriptArea.textContent = 'Listening...';
-                try { recognition = new SpeechRecognition(); } catch (e) { /* ... */ console.error("Error creating SpeechRecognition object:", e); showMessage("Error: Cannot create voice recognition object.", true, true); updateMicStatus('error'); isListening = false; startBoredomTimer(investorData); return; }
+                showMessage("Pitch Now!");
+                updateMicStatus('listening');
+                isListening = true;
+                DOM.transcriptArea.textContent = 'Listening...';
+                
+                try {
+                    recognition = new SpeechRecognition();
+                    recognition.continuous = true; // Changed to true to catch pauses
+                    recognition.interimResults = true; // Changed to true to detect pauses
+                    recognition.lang = 'en-US';
+                    
+                    let lastSpeechTime = Date.now();
+                    let pauseCheckInterval = setInterval(() => {
+                        if (isListening && Date.now() - lastSpeechTime > 1500) { // Reduced from 2000ms to 1500ms
+                            console.log("Detected pause in speech");
+                            investorData.boredomLevel += 15; // Increased from 5 to 15
+                            const boredomBar = investorData.element.querySelector('.boredom-bar');
+                            if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                            
+                            if (investorData.boredomLevel >= 100) {
+                                clearInterval(pauseCheckInterval);
+                                endPitch(investorData, false, "Lost interest - too many pauses!");
+                            }
+                        }
+                    }, 500);
 
-                recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-US';
-                const listenTimeout = setTimeout(() => { if (isListening) { console.log("Listen timeout reached."); stopRecognition(); } }, VOICE_LISTEN_DURATION_MS);
-                recognition.onstart = () => { console.log("Speech recognition started."); };
+                    recognition.onresult = (event) => {
+                        lastSpeechTime = Date.now(); // Update last speech time
+                        const transcript = Array.from(event.results)
+                            .map(result => result[0].transcript)
+                            .join(' ');
+                        
+                        console.log('Speech detected:', transcript);
+                        currentPitchAnalysis = analyzePitch(transcript);
+                        
+                        // Increase boredom more rapidly for consecutive filler words
+                        if (currentPitchAnalysis.maxConsecutiveFillerWords >= 2) {
+                            investorData.boredomLevel += currentPitchAnalysis.maxConsecutiveFillerWords * 10;
+                            const boredomBar = investorData.element.querySelector('.boredom-bar');
+                            if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                            
+                            if (investorData.boredomLevel >= 100) {
+                                endPitch(investorData, false, "Lost interest - too many filler words!");
+                                return;
+                            }
+                        }
 
-                recognition.onresult = (event) => {
-                    clearTimeout(listenTimeout);
-                    const transcript = event.results[0][0].transcript;
-                    console.log('Speech detected:', transcript);
+                        investorData.pitchScore = currentPitchAnalysis.score;
+                        investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
+                        
+                        let feedback = `Heard: "${transcript.substring(0, 40)}..." `;
+                        feedback += `<span class="keyword-feedback">(Words: ${currentPitchAnalysis.words}, Score: ${currentPitchAnalysis.score} [+${currentPitchAnalysis.positive}/-${currentPitchAnalysis.negative}])</span>`;
+                        DOM.transcriptArea.innerHTML = feedback;
+                    };
 
-                    currentPitchAnalysis = analyzePitch(transcript);
-                    investorData.pitchScore = currentPitchAnalysis.score;
-                    investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
-                    currentPitchAnalysis.boredomFactor = investorData.boredomIncrementFactor; // Store factor in analysis obj too
+                    recognition.onend = () => {
+                        clearInterval(pauseCheckInterval);
+                        console.log("Speech recognition ended.");
+                        isListening = false;
+                        updateMicStatus('idle');
+                        if (!investorData.boredomTimerId && investorData.isBeingPitched) {
+                            startBoredomTimer(investorData);
+                        }
+                        recognition = null;
+                    };
 
-                    // Display feedback including the calculated factor
-                    let feedback = `Heard: "${transcript.substring(0, 40)}..." `;
-                    feedback += `<span class="keyword-feedback">(Words: ${currentPitchAnalysis.words}, Score: ${currentPitchAnalysis.score} [+${currentPitchAnalysis.positive}/-${currentPitchAnalysis.negative}], Boredom Factor: ${currentPitchAnalysis.boredomFactor.toFixed(2)})</span>`;
-                    DOM.transcriptArea.innerHTML = feedback;
-                    updateMicStatus('processing');
-                };
-                recognition.onerror = (event) => { /* ... (Enhanced error handling same as v1.8) ... */
-                    clearTimeout(listenTimeout); console.error('Speech recognition error:', event.error);
-                    currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.1 }; // Reset analysis
-                    investorData.boredomIncrementFactor = 0.1; // Penalize with very fast boredom
-                    investorData.pitchScore = -Infinity;
-                    let errorMsg = `Mic Error: ${event.error}`; if (event.error === 'no-speech') { errorMsg = "Mic Error: Didn't hear anything!"; DOM.transcriptArea.textContent = 'No speech detected.'; } else if (event.error === 'not-allowed') { errorMsg = "Mic Error: Permission denied or HTTPS required."; DOM.transcriptArea.textContent = 'Check mic permissions & HTTPS.'; } else if (event.error === 'audio-capture') { errorMsg = "Mic Error: No microphone found or input issue."; DOM.transcriptArea.textContent = 'Check microphone connection.'; } else { DOM.transcriptArea.textContent = `Error: ${event.error}`; } showMessage(errorMsg, true, true); updateMicStatus('error'); if (!investorData.boredomTimerId && investorData.isBeingPitched) { startBoredomTimer(investorData); } isListening = false; recognition = null;
-                 };
-                recognition.onend = () => {
-                    clearTimeout(listenTimeout); console.log("Speech recognition ended."); isListening = false; updateMicStatus('idle');
-                    // Start boredom timer AFTER analysis/error handling is done
+                    recognition.start();
+                    console.log("Debug: recognition.start() called.");
+                } catch (e) {
+                    console.error("Error starting recognition:", e);
+                    showMessage("Error starting voice recognition", true);
+                    updateMicStatus('error');
+                    isListening = false;
                     if (!investorData.boredomTimerId && investorData.isBeingPitched) {
                         startBoredomTimer(investorData);
                     }
-                    recognition = null;
-                 };
-
-                try { recognition.start(); console.log("Debug: recognition.start() called."); }
-                catch (e) { /* ... (Enhanced error handling same as v1.8) ... */ console.error("Error calling recognition.start():", e); showMessage(`Error starting Mic: ${e.name}. Check Permissions/HTTPS.`, true, true); updateMicStatus('error'); isListening = false; if (!investorData.boredomTimerId && investorData.isBeingPitched) { startBoredomTimer(investorData); } }
+                }
             } else {
                 console.log("Debug: Speech API not available path in startPitch.");
                 showMessage("Voice input not supported by browser.", true, true);
-                investorData.boredomIncrementFactor = 0.1; startBoredomTimer(investorData);
+                investorData.boredomIncrementFactor = 0.1;
+                startBoredomTimer(investorData);
             }
         }
 
@@ -541,30 +593,43 @@
              if (!investorData || !investorData.isBeingPitched || investorData.boredomTimerId) return;
              const boredomBar = investorData.element.querySelector('.boredom-bar');
              const boredomInterval = 200;
-             const boredomIncrement = 100 / (PITCH_DURATION_SECONDS * (1000 / boredomInterval) * investorData.boredomIncrementFactor);
+             // Make base boredom increase 3x faster
+             const boredomIncrement = (100 / (PITCH_DURATION_SECONDS * (1000 / boredomInterval) * investorData.boredomIncrementFactor)) * 3;
              console.log(`Starting boredom timer. Factor: ${investorData.boredomIncrementFactor.toFixed(2)}, Increment: ${boredomIncrement.toFixed(3)}`);
 
              investorData.boredomTimerId = setInterval(() => {
                  if (!investorData.isBeingPitched || isPaused) return;
+                 
+                 // Add extra boredom for consecutive filler words
+                 if (currentPitchAnalysis.maxConsecutiveFillerWords >= 2) {
+                     investorData.boredomLevel += currentPitchAnalysis.maxConsecutiveFillerWords * 20; // Doubled from 10 to 20
+                 }
+                 
+                 // Add extra boredom for high filler word ratio
+                 const fillerRatio = currentPitchAnalysis.negative / currentPitchAnalysis.words;
+                 if (fillerRatio > 0.15) {
+                     investorData.boredomLevel += 10; // Added penalty for high filler ratio
+                 }
+
                  investorData.boredomLevel += boredomIncrement;
                  if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
 
-                 // Success Condition - slightly stricter base chance
-                 if (investorData.pitchTimeLeft <= PITCH_DURATION_SECONDS - 8) {
-                     const baseSuccessChance = 0.08; // Reduced from 0.10
-                     const scoreBonus = (investorData.pitchScore > 0) ? Math.min(0.15, investorData.pitchScore * 0.05) : 0;
-                     const boredomFactor = (1 - (investorData.boredomLevel / 125));
+                 // Success Condition - stricter requirements
+                 if (investorData.pitchTimeLeft <= PITCH_DURATION_SECONDS - 5) { // Changed from 8 to 5 seconds
+                     const baseSuccessChance = 0.12; // Increased from 0.08 to allow quicker success
+                     const scoreBonus = (investorData.pitchScore > 0) ? Math.min(0.2, investorData.pitchScore * 0.08) : 0;
+                     const boredomFactor = (1 - (investorData.boredomLevel / 100)); // Changed from 125 to 100
                      const successChance = Math.max(0.01, (baseSuccessChance + scoreBonus) * boredomFactor);
 
-                     // console.log(`Success check: Score=${investorData.pitchScore}, Boredom=${investorData.boredomLevel.toFixed(1)}, Chance=${successChance.toFixed(3)}`);
-
-                     if (Math.random() < successChance && investorData.boredomLevel < 90) {
-                         endPitch(investorData, true, "Great pitch!"); return;
+                     if (Math.random() < successChance && investorData.boredomLevel < 75) { // Changed from 90 to 75
+                         endPitch(investorData, true, "Great pitch!");
+                         return;
                      }
                  }
-                 // Failure Condition
+
+                 // Failure Condition - happens sooner
                  if (investorData.boredomLevel >= 100) {
-                     endPitch(investorData, false, "Investor fell asleep!");
+                     endPitch(investorData, false, "Lost interest!");
                  }
              }, boredomInterval);
         }
