@@ -113,10 +113,12 @@
 
     <h1 class="text-3xl font-bold mb-4 text-blue-600">Pitch Frenzy! (Voice Enabled - Stricter Analysis)</h1>
 
-    <div class="flex justify-between w-full max-w-4xl mb-4 p-3 bg-white rounded-lg shadow">
-        <div class="flex items-center space-x-2">
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-             <span class="font-semibold">Time Left:</span> <span id="game-timer" class="font-mono text-lg text-red-600">03:00</span>
+    <div class="game-header flex justify-between items-center p-4 bg-white shadow-md">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="font-semibold">Time Left:</span> <span id="game-timer" class="font-mono text-lg text-red-600">03:00</span>
+            </div>
         </div>
         <div class="flex items-center space-x-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a2 2 0 0 1 1.79 1.11L15 5.88Z"/></svg>
@@ -177,53 +179,46 @@
         const MAX_INVESTORS = 12; // Increased from 8 to 12
         const INVESTOR_SPAWN_INTERVAL_MS = 3000; // Decreased from 5000 to 3000ms
         const VOICE_LISTEN_DURATION_MS = 10000;
-        const DOM = { 
-            gameTimerDisplay: document.getElementById('game-timer'), 
-            scoreDisplay: document.getElementById('score'), 
-            gameArea: document.getElementById('game-area'), 
-            founder: document.getElementById('founder'), 
-            startButton: document.getElementById('start-button'), 
-            pauseButton: document.getElementById('pause-button'), 
-            messageArea: document.getElementById('message-area'), 
-            micStatus: document.getElementById('mic-status'), 
-            transcriptArea: document.getElementById('transcript-area'), 
-            debugWarningArea: document.getElementById('debug-warning-area'), 
-            rulesModal: document.getElementById('rules-modal'), 
-            closeRulesButton: document.getElementById('close-rules-button'),
-            summaryModal: document.getElementById('summary-modal'),
-            closeSummaryButton: document.getElementById('close-summary-button'),
+        const DOM = {
+            gameTimer: document.getElementById('game-timer'),
+            scoreDisplay: document.getElementById('score-display'),
+            micStatus: document.getElementById('mic-status'),
+            transcriptArea: document.getElementById('transcript-area'),
+            warningArea: document.getElementById('warning-area'),
+            rulesModal: document.getElementById('rules-modal'),
             successfulPitchesDisplay: document.getElementById('successful-pitches'),
             finalScoreDisplay: document.getElementById('final-score'),
             performanceStats: document.getElementById('performance-stats'),
             improvementTips: document.getElementById('improvement-tips')
         };
-        let score = 0; let gameTimeRemaining = GAME_DURATION_SECONDS; let gameIntervalId = null; let investorSpawnIntervalId = null;
-        let investors = []; let isGameRunning = false; let isPaused = false; let currentPitch = null; let isListening = false;
-        const INVESTOR_DEFAULT_FACE = '🧐'; const INVESTOR_SUCCESS_FACE = '👍'; const INVESTOR_FAIL_FACE = '😴';
-        let rulesShown = false;
 
-        // Game statistics tracking
-        let gameStats = {
-            totalPitches: 0,
-            successfulPitches: 0,
-            failedPitches: 0,
-            averageScore: 0,
-            totalScore: 0,
-            pitchAnalysis: {
-                tooSlow: 0,
-                tooFast: 0,
-                highFillerWords: 0,
-                lowKeywordDensity: 0,
-                repetitivePhrases: 0,
-                consecutiveFillers: 0
-            },
-            pitchScores: [],
-            avgPitchScore: 0
-        };
+        // Game state variables
+        let isGameRunning = false;
+        let gameTimeLeft = GAME_DURATION_SECONDS;
+        let score = 0;
+        let currentPitch = null;
+        
+        // Update initial display
+        document.addEventListener('DOMContentLoaded', function() {
+            if (DOM.gameTimer) DOM.gameTimer.textContent = "03:00";
+            updateScoreDisplay();
+        });
+
+        function resetGame() {
+            stopAllPitches();
+            gameTimeLeft = GAME_DURATION_SECONDS;
+            score = 0;
+            currentPitch = null;
+            isGameRunning = false;
+            if (DOM.gameTimer) DOM.gameTimer.textContent = "03:00";
+            updateScoreDisplay();
+            clearAllInvestors();
+            gameStats = createInitialGameStats();
+        }
 
         // --- Functions --- (formatTime, updateGameTimerDisplay, updateScoreDisplay, showMessage, clearMessage, updateMicStatus, showWarning, clearWarning, showRulesModal, hideRulesModal - same as v1.8)
         function formatTime(totalSeconds) { const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60; return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
-        function updateGameTimerDisplay() { DOM.gameTimerDisplay.textContent = formatTime(gameTimeRemaining); }
+        function updateGameTimerDisplay() { DOM.gameTimer.textContent = formatTime(gameTimeLeft); }
         function updateScoreDisplay() { DOM.scoreDisplay.textContent = score; }
         function showMessage(msg, isError = false, persist = false) { if (!DOM.messageArea) { console.error("Debug: messageArea not found!"); return; } DOM.messageArea.textContent = msg; DOM.messageArea.style.color = isError ? '#dc2626' : '#374151'; if (!isError && !persist) { setTimeout(() => { if (DOM.messageArea.textContent === msg) DOM.messageArea.textContent = ''; }, 3000); } }
         function clearMessage() { if (DOM.messageArea) DOM.messageArea.textContent = ''; if (DOM.transcriptArea) DOM.transcriptArea.textContent = ''; }
@@ -263,7 +258,7 @@
             DOM.micStatus.innerHTML = svg;
             DOM.micStatus.className = `flex items-center justify-center w-10 h-10 rounded-full ${colorClass}`;
         }
-        function showWarning(id, text, type = 'api-error') { if (!DOM.debugWarningArea) return; const existing = document.getElementById(id); if (existing) existing.remove(); const warning = document.createElement('p'); warning.id = id; warning.textContent = text; warning.className = type === 'https' ? 'debug-warning' : 'api-error-warning'; DOM.debugWarningArea.appendChild(warning); }
+        function showWarning(id, text, type = 'api-error') { if (!DOM.warningArea) return; const existing = document.getElementById(id); if (existing) existing.remove(); const warning = document.createElement('p'); warning.id = id; warning.textContent = text; warning.className = type === 'https' ? 'debug-warning' : 'api-error-warning'; DOM.warningArea.appendChild(warning); }
         function clearWarning(id) { const existing = document.getElementById(id); if (existing) existing.remove(); }
         function showRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.remove('hidden'); } }
         function hideRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.add('hidden'); } }
