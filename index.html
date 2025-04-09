@@ -181,11 +181,15 @@
         const VOICE_LISTEN_DURATION_MS = 10000;
         const DOM = {
             gameTimer: document.getElementById('game-timer'),
-            scoreDisplay: document.getElementById('score-display'),
+            scoreDisplay: document.getElementById('score'),
+            gameArea: document.getElementById('game-area'),
+            messageArea: document.getElementById('message-area'),
             micStatus: document.getElementById('mic-status'),
             transcriptArea: document.getElementById('transcript-area'),
             warningArea: document.getElementById('warning-area'),
             rulesModal: document.getElementById('rules-modal'),
+            pitchButton: document.getElementById('pitch-now-button'),
+            summaryModal: document.getElementById('summary-modal'),
             successfulPitchesDisplay: document.getElementById('successful-pitches'),
             finalScoreDisplay: document.getElementById('final-score'),
             performanceStats: document.getElementById('performance-stats'),
@@ -198,6 +202,9 @@
         let score = 0;
         let currentPitch = null;
         
+        // Initialize transcript variable
+        let currentTranscript = '';
+
         // Update initial display
         document.addEventListener('DOMContentLoaded', function() {
             if (DOM.gameTimer) DOM.gameTimer.textContent = "03:00";
@@ -520,11 +527,14 @@
             currentPitch = investorData;
             investorData.isBeingPitched = true;
             investorData.element.style.outline = '3px solid blue';
+            investorData.boredomLevel = 0;
+            currentTranscript = '';
+
             // Reset pitch analysis state for this investor
             investorData.boredomIncrementFactor = 0.15;
             investorData.pitchScore = 0;
-            investorData.pitchTimeLeft = PITCH_DURATION_SECONDS; // Initialize the timer to 30 seconds
-            currentPitchAnalysis = analyzePitch(transcript);
+            investorData.pitchTimeLeft = PITCH_DURATION_SECONDS;
+            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 };
 
             clearMessage();
 
@@ -538,7 +548,6 @@
                 const timerWidth = (investorData.pitchTimeLeft / PITCH_DURATION_SECONDS) * 100;
                 if(timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
                 
-                // End pitch if time runs out
                 if (investorData.pitchTimeLeft <= 0) {
                     endPitch(investorData, false, "Time's up!");
                 }
@@ -550,43 +559,58 @@
                 showMessage("Pitch Now!");
                 updateMicStatus('listening');
                 isListening = true;
-                DOM.transcriptArea.textContent = 'Listening...';
+                if (DOM.transcriptArea) DOM.transcriptArea.textContent = 'Listening...';
+                if (DOM.pitchButton) DOM.pitchButton.classList.remove('hidden');
                 
                 try {
                     recognition = new SpeechRecognition();
-                    recognition.continuous = true; // Changed to true to catch pauses
-                    recognition.interimResults = true; // Changed to true to detect pauses
+                    recognition.continuous = true;
+                    recognition.interimResults = true;
                     recognition.lang = 'en-US';
                     
                     let lastSpeechTime = Date.now();
                     let pauseCheckInterval = setInterval(() => {
-                        if (isListening && Date.now() - lastSpeechTime > 1500) { // Reduced from 2000ms to 1500ms
+                        if (isListening && Date.now() - lastSpeechTime > 1500) {
                             console.log("Detected pause in speech");
-                            investorData.boredomLevel += 15; // Increased from 5 to 15
-                            const boredomBar = investorData.element.querySelector('.boredom-bar');
-                            if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
-                            
-                            if (investorData.boredomLevel >= 100) {
-                                clearInterval(pauseCheckInterval);
-                                endPitch(investorData, false, "Lost interest - too many pauses!");
+                            if (investorData.isBeingPitched) {
+                                investorData.boredomLevel += 15;
+                                const boredomBar = investorData.element.querySelector('.boredom-bar');
+                                if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                                
+                                if (investorData.boredomLevel >= 100) {
+                                    clearInterval(pauseCheckInterval);
+                                    endPitch(investorData, false, "Lost interest - too many pauses!");
+                                }
                             }
                         }
                     }, 500);
 
                     recognition.onresult = (event) => {
-                        lastSpeechTime = Date.now(); // Update last speech time
-                        const transcript = Array.from(event.results)
+                        lastSpeechTime = Date.now();
+                        const results = Array.from(event.results);
+                        currentTranscript = results
                             .map(result => result[0].transcript)
                             .join(' ');
                         
-                        console.log('Speech detected:', transcript);
-                        currentPitchAnalysis = analyzePitch(transcript);
+                        console.log('Speech detected:', currentTranscript);
                         
-                        // Increase boredom more rapidly for consecutive filler words
-                        if (currentPitchAnalysis.maxConsecutiveFillerWords >= 2) {
-                            investorData.boredomLevel += currentPitchAnalysis.maxConsecutiveFillerWords * 10;
+                        // Analyze the current transcript
+                        currentPitchAnalysis = analyzePitch(currentTranscript);
+                        
+                        // Update the feedback display
+                        updateFeedbackDisplay(currentPitchAnalysis);
+                        
+                        // Update boredom based on analysis
+                        if (investorData.isBeingPitched) {
+                            // Increase boredom for filler words
+                            if (currentPitchAnalysis.hesitationCount > 0) {
+                                investorData.boredomLevel += currentPitchAnalysis.hesitationCount * 5;
+                            }
+                            
                             const boredomBar = investorData.element.querySelector('.boredom-bar');
-                            if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                            if(boredomBar) {
+                                boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
+                            }
                             
                             if (investorData.boredomLevel >= 100) {
                                 endPitch(investorData, false, "Lost interest - too many filler words!");
@@ -594,12 +618,10 @@
                             }
                         }
 
-                        investorData.pitchScore = currentPitchAnalysis.score;
-                        investorData.boredomIncrementFactor = calculateBoredomFactor(currentPitchAnalysis);
-                        
-                        let feedback = `Heard: "${transcript.substring(0, 40)}..." `;
-                        feedback += `<span class="keyword-feedback">(Words: ${currentPitchAnalysis.words}, Score: ${currentPitchAnalysis.score} [+${currentPitchAnalysis.positive}/-${currentPitchAnalysis.negative}])</span>`;
-                        DOM.transcriptArea.innerHTML = feedback;
+                        // Update display
+                        if (DOM.transcriptArea) {
+                            DOM.transcriptArea.innerHTML = `Speaking: "${currentTranscript.substring(0, 50)}..."`;
+                        }
                     };
 
                     recognition.onend = () => {
@@ -607,6 +629,7 @@
                         console.log("Speech recognition ended.");
                         isListening = false;
                         updateMicStatus('idle');
+                        if (DOM.pitchButton) DOM.pitchButton.classList.add('hidden');
                         if (!investorData.boredomTimerId && investorData.isBeingPitched) {
                             startBoredomTimer(investorData);
                         }
@@ -910,19 +933,6 @@
                 realTimeFeedback.textContent = "Good flow!";
                 realTimeFeedback.className = "success";
             }
-        }
-
-        // Update the processTranscript function to include real-time feedback
-        function processTranscript(transcript) {
-            if (!currentPitch || !isGameRunning) return;
-            
-            const analysis = analyzePitch(transcript);
-            updateFeedbackDisplay(analysis);
-            currentPitchAnalysis = analysis;
-            
-            // Update the investor's boredom based on the pitch quality
-            const boredomModifier = Math.max(0.5, 1 - (analysis.score / 10));
-            currentPitch.boredomIncrementFactor = BOREDOM_INCREMENT * boredomModifier;
         }
 
         function copyShareMessage() {
