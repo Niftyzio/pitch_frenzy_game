@@ -656,13 +656,19 @@
             if (success) {
                 score++;
                 updateScoreDisplay();
-                showMessage(message, false);
-                if (faceSpan) faceSpan.textContent = INVESTOR_SUCCESS_FACE;
+                showMessage("👍 Great pitch! Click another investor to continue.", false);
+                if (faceSpan) faceSpan.textContent = '👍';  // Show thumbs up
                 investorData.element.style.backgroundColor = '#4ade80';
-                setTimeout(() => removeInvestor(investorData), 1500);
+                setTimeout(() => removeInvestor(investorData), 2000);  // Increased from 1500 to 2000
             } else {
-                if (isGameRunning) showMessage(message, true);
-                if (faceSpan) faceSpan.textContent = INVESTOR_FAIL_FACE;
+                if (isGameRunning) {
+                    // Check if failure was due to boredom or time
+                    const failMessage = message.includes("Lost interest") ? 
+                        "👎 Bored! Click another investor to try again." : 
+                        "⏰ Time's up! Click another investor to try again.";
+                    showMessage(failMessage, true);
+                }
+                if (faceSpan) faceSpan.textContent = message.includes("Lost interest") ? '👎' : '⏰';  // Show thumbs down for boredom, clock for timeout
                 investorData.element.style.backgroundColor = '#f87171';
                 setTimeout(() => removeInvestor(investorData), 2000);
             }
