@@ -3,155 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pitch Frenzy - Voice Input! (Stricter Analysis)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Pitch Frenzy!</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-      body { font-family: sans-serif; }
-      .character {
-        width: 50px; height: 50px; border-radius: 50%; position: absolute; display: flex;
-        align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer;
-        transition: transform 0.2s ease, background-color 0.5s ease;
-      }
-      .character .face { display: inline-block; transition: transform 0.3s ease; }
-      .character:hover { transform: scale(1.1); }
-      .timer-bar-container, .boredom-bar-container {
-        width: 50px; height: 5px; background-color: #e0e0e0; border-radius: 2.5px;
-        overflow: hidden; position: absolute; left: 0;
-      }
-      .timer-bar-container { top: -10px; } .boredom-bar-container { top: -18px; }
-      .timer-bar { width: 100%; background-color: #4caf50; height: 100%; border-radius: 2.5px; transition: width 0.5s linear; }
-      .boredom-bar { width: 0%; background-color: #f44336; height: 100%; border-radius: 2.5px; transition: width 0.5s linear; }
-      button:disabled { opacity: 0.5; cursor: not-allowed; }
-      #mic-status svg { width: 1.25rem; height: 1.25rem; display: inline-block; vertical-align: middle; }
-      .debug-warning { color: #eab308; background-color: #fffbeb; border: 1px solid #fde68a; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.875rem; margin-top: 0.5rem; text-align: center;}
-      .api-error-warning { color: #dc2626; font-size: 0.875rem; margin-top: 0.5rem; }
-      .keyword-feedback { font-size: 0.8rem; color: #6b7280; } /* gray-500 */
-      #rules-modal li { margin-bottom: 0.5rem; }
-      #rules-modal strong { color: #1d4ed8; }
-      .feedback-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(255, 255, 255, 0.9);
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        font-size: 14px;
-        max-width: 300px;
-      }
-      .feedback-indicator .metric {
-        margin: 5px 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .feedback-indicator .score {
-        font-weight: bold;
-        color: #4a90e2;
-      }
-      .warning {
-        color: #e74c3c;
-      }
-      .success {
-        color: #2ecc71;
-      }
+        :root {
+            --primary-color: #4F46E5;
+            --secondary-color: #34D399;
+            --background-color: #F3F4F6;
+            --game-area-color: #EFF6FF;
+            --accent-color: #EC4899;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f6f7ff 0%, #e8eaff 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .game-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .game-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 1.5rem;
+        }
+
+        .game-title {
+            background: linear-gradient(135deg, #4F46E5 0%, #EC4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .game-area {
+            background: var(--game-area-color);
+            border-radius: 24px;
+            box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1), 
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.05),
+                        0 0 100px rgba(79, 70, 229, 0.1);
+            min-height: 600px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .investor {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .investor:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #F59E0B 0%, #F97316 100%);
+            color: white;
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            margin: 1rem 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .timer {
+            font-family: 'Monaco', monospace;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .score {
+            font-size: 1.5rem;
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        .mic-status {
+            padding: 0.5rem;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-indicator {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            max-width: 300px;
+        }
+
+        .modal {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+                        0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .boredom-bar {
+            background: linear-gradient(90deg, #22C55E 0%, #F59E0B 50%, #EF4444 100%);
+            height: 4px;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .timer-bar {
+            background: linear-gradient(90deg, #4F46E5 0%, #EC4899 100%);
+            height: 4px;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+<body class="bg-gray-50">
+    <div class="game-container">
+        <h1 class="game-title">Pitch Frenzy!</h1>
+        
+        <div class="game-header">
+            <div class="stats-container">
+                <div class="stat-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span class="font-semibold">Time Left:</span>
+                    <span id="game-timer" class="timer">03:00</span>
+                </div>
+                <div class="stat-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-secondary"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <span class="font-semibold">Score:</span>
+                    <span id="score" class="score">0</span>
+                </div>
+                <div id="mic-status" class="mic-status">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </div>
+            </div>
+        </div>
 
-    <div id="rules-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
-            <h2 class="text-2xl font-bold mb-4 text-center text-blue-600">How to Play Pitch Frenzy!</h2>
-            <ul class="list-disc list-inside mb-6 text-gray-700">
-                 <li><strong>Purpose:</strong> Practice your elevator pitch with mock investors.</li>
-                 <li><strong>Goal:</strong> Successfully pitch to as many investors (🧐) as possible within the 3-minute time limit.</li>
-                 <li><strong>Pitching:</strong> Click an investor to start. Speak clearly when the mic icon (��️) turns red.</li>
-                 <li><strong>Time Limit:</strong> Each investor only listens for 30 seconds (⏳).</li>
-                 <li><strong>Boredom:</strong> Use relevant keywords ('market', 'growth', 'solution') to keep investors interested. Filler words ('um', 'like', 'hmm') or short pitches increase boredom (🟥).</li>
-                 <li><strong>Failure (Pitch):</strong> If the boredom meter fills or the 30s timer runs out, the investor falls asleep (😴) and you fail that pitch.</li>
-                 <li><strong>Failure (Game):</strong> The game ends when the main 3-minute timer runs out. Aim for the highest score!</li>
+        <div id="game-area" class="game-area"></div>
+
+        <div class="game-controls">
+            <button id="start-button" class="btn btn-primary">Start Game</button>
+            <button id="pause-button" class="btn btn-secondary" disabled>Pause</button>
+        </div>
+
+        <div id="message-area" class="mt-4 text-center text-lg font-medium"></div>
+        <div id="transcript-area" class="mt-2 text-center text-gray-600"></div>
+        <div id="warning-area" class="mt-2"></div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="modal-backdrop fixed inset-0 bg-black bg-opacity-50"></div>
+        <div class="modal-content bg-white p-8 rounded-2xl max-w-2xl mx-4 relative z-10">
+            <h2 class="text-2xl font-bold mb-4 text-center text-primary">How to Play Pitch Frenzy!</h2>
+            <ul class="list-disc list-inside mb-6 text-gray-700 space-y-2">
+                <li><strong>Purpose:</strong> Practice your elevator pitch with mock investors.</li>
+                <li><strong>Goal:</strong> Successfully pitch to as many investors (🧐) as possible within the 3-minute time limit.</li>
+                <li><strong>Pitching:</strong> Click an investor to start. Speak clearly when the mic icon (🎙️) turns red.</li>
+                <li><strong>Time Limit:</strong> Each investor only listens for 30 seconds (⏳).</li>
+                <li><strong>Boredom:</strong> Use relevant keywords to keep investors interested. Filler words increase boredom (🟥).</li>
+                <li><strong>Success/Failure:</strong> Get a thumbs up (👍) for good pitches, thumbs down (👎) if they get bored.</li>
             </ul>
-            <div class="text-center">
-                <button id="close-rules-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Got It!</button>
-            </div>
+            <button id="close-rules-button" class="btn btn-primary w-full">Got it!</button>
         </div>
     </div>
 
-    <div id="summary-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
-            <h2 class="text-2xl font-bold mb-4 text-center text-blue-600">Pitch Frenzy Results!</h2>
+    <!-- Game Summary Modal -->
+    <div id="summary-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="modal-backdrop fixed inset-0 bg-black bg-opacity-50"></div>
+        <div class="modal-content bg-white p-8 rounded-2xl max-w-2xl mx-4 relative z-10">
+            <h2 class="text-2xl font-bold mb-4 text-center text-primary">Pitch Frenzy Results!</h2>
+            <div class="text-center mb-6">
+                <p class="text-xl">You successfully pitched to <span id="successful-pitches" class="font-bold text-secondary">0</span> investors!</p>
+                <p class="text-lg">Total Score: <span id="final-score" class="font-bold text-primary">0</span></p>
+            </div>
+            
             <div class="mb-6">
-                <div class="text-center mb-4">
-                    <p class="text-xl font-semibold">You successfully pitched to <span id="successful-pitches" class="text-green-600">0</span> investors!</p>
-                    <p class="text-lg">Total Score: <span id="final-score" class="text-blue-600">0</span></p>
-                </div>
-                <div class="border-t border-gray-200 pt-4">
-                    <h3 class="font-semibold mb-2">Performance Analysis:</h3>
-                    <ul id="performance-stats" class="list-disc list-inside text-gray-700 space-y-2">
-                    </ul>
-                </div>
-                <div class="border-t border-gray-200 pt-4 mt-4">
-                    <h3 class="font-semibold mb-2">Improvement Tips:</h3>
-                    <ul id="improvement-tips" class="list-disc list-inside text-gray-700 space-y-2">
-                    </ul>
-                </div>
-                <div class="border-t border-gray-200 pt-4 mt-4">
-                    <h3 class="font-semibold mb-2">Share Your Achievement:</h3>
-                    <div class="bg-gray-50 p-3 rounded-lg text-center">
-                        <p id="share-message" class="text-lg font-medium text-gray-800 mb-2">🎯 I pitched 0 investors and scored 0 points in Pitch Frenzy! Think you can beat my score? 🚀 #PitchFrenzy</p>
-                        <button onclick="copyShareMessage()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">
-                            Copy to Clipboard
-                        </button>
-                    </div>
+                <h3 class="font-semibold mb-2">Performance Analysis:</h3>
+                <ul id="performance-stats" class="list-disc list-inside text-gray-700"></ul>
+            </div>
+            
+            <div class="mb-6">
+                <h3 class="font-semibold mb-2">Improvement Tips:</h3>
+                <ul id="improvement-tips" class="list-disc list-inside text-gray-700"></ul>
+            </div>
+
+            <div class="border-t border-gray-200 pt-4">
+                <h3 class="font-semibold mb-2">Share Your Achievement:</h3>
+                <div class="bg-gray-50 p-4 rounded-xl">
+                    <p id="share-message" class="text-lg mb-3"></p>
+                    <button onclick="copyShareMessage()" class="btn btn-primary w-full">Copy to Clipboard</button>
                 </div>
             </div>
-            <div class="text-center">
-                <button id="close-summary-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Play Again</button>
-            </div>
-        </div>
-    </div>
 
-    <h1 class="text-3xl font-bold mb-4 text-blue-600">Pitch Frenzy! (Voice Enabled - Stricter Analysis)</h1>
-
-    <div class="game-header flex justify-between items-center p-4 bg-white shadow-md">
-        <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span class="font-semibold">Time Left:</span> <span id="game-timer" class="font-mono text-lg text-red-600">03:00</span>
-            </div>
+            <button id="close-summary-button" class="btn btn-secondary w-full mt-4">Play Again</button>
         </div>
-        <div class="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a2 2 0 0 1 1.79 1.11L15 5.88Z"/></svg>
-             <span class="font-semibold">Score:</span> <span id="score" class="font-mono text-lg text-green-600">0</span>
-        </div>
-    </div>
-    <div id="game-area" class="relative w-full max-w-4xl h-[60vh] bg-blue-100 rounded-lg shadow-inner overflow-hidden border-2 border-blue-300">
-        <div id="founder" class="character bg-green-500" style="left: 50%; top: 85%; transform: translateX(-50%); cursor: default;">😎</div>
-    </div>
-    <div class="mt-4 flex flex-col items-center w-full max-w-4xl">
-         <div class="flex space-x-4">
-            <button id="start-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Start Game</button>
-            <button id="pause-button" class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Pause</button>
-         </div>
-         <div class="flex items-center mt-3 space-x-4">
-             <div id="mic-status" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200"></div>
-             <button id="pitch-now-button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out hidden">Pitch Now!</button>
-             <p id="message-area" class="h-6 text-gray-700 font-semibold"></p>
-         </div>
-         <p id="transcript-area" class="mt-1 h-10 text-sm text-gray-500 italic"></p>
-         <div id="debug-warning-area" class="w-full max-w-md"></div>
-    </div>
-
-    <div id="feedbackIndicator" class="feedback-indicator hidden">
-        <div class="metric">
-            <span>Pitch Quality:</span>
-            <span class="score" id="pitchScore">0</span>
-        </div>
-        <div class="metric">
-            <span>Business Terms:</span>
-            <span id="businessTerms">0</span>
-        </div>
-        <div id="realTimeFeedback" class="warning"></div>
     </div>
 
     <script>
@@ -330,14 +438,14 @@
         }
 
         function showGameSummary() {
-            // Update summary displays
+            // Update summary displays with correct values
             DOM.successfulPitchesDisplay.textContent = gameStats.successfulPitches;
-            DOM.finalScoreDisplay.textContent = score;
+            DOM.finalScoreDisplay.textContent = calculateFinalScore();
 
-            // Update share message
+            // Update share message with correct values
             const shareMessage = document.getElementById('share-message');
             if (shareMessage) {
-                shareMessage.textContent = `🎯 I pitched ${gameStats.totalPitches} investors and scored ${score} points in Pitch Frenzy! Think you can beat my score? 🚀 #PitchFrenzy`;
+                shareMessage.textContent = `🎯 I pitched ${gameStats.totalPitches} investors and scored ${calculateFinalScore()} points in Pitch Frenzy! Think you can beat my score? 🚀 #PitchFrenzy`;
             }
 
             // Clear previous stats
@@ -347,7 +455,7 @@
             // Add performance statistics
             const stats = [
                 `Success Rate: ${((gameStats.successfulPitches / gameStats.totalPitches) * 100).toFixed(1)}%`,
-                `Average Pitch Score: ${gameStats.averageScore.toFixed(1)}`,
+                `Average Pitch Score: ${gameStats.avgPitchScore.toFixed(1)}`,
                 `Total Pitches Attempted: ${gameStats.totalPitches}`
             ];
             stats.forEach(stat => {
@@ -357,382 +465,38 @@
             });
 
             // Generate improvement tips based on statistics
-            const tips = [];
-            
-            if (gameStats.pitchAnalysis.tooSlow > gameStats.totalPitches / 2) {
-                tips.push("Try speaking a bit faster - aim for 100-180 words per minute");
-            }
-            if (gameStats.pitchAnalysis.tooFast > gameStats.totalPitches / 2) {
-                tips.push("Slow down your speaking pace for better clarity");
-            }
-            if (gameStats.pitchAnalysis.highFillerWords > gameStats.totalPitches / 2) {
-                tips.push("Reduce filler words like 'um', 'like', and 'hmm'");
-            }
-            if (gameStats.pitchAnalysis.lowKeywordDensity > gameStats.totalPitches / 2) {
-                tips.push("Include more business keywords like 'market', 'growth', and 'solution'");
-            }
-            if (gameStats.pitchAnalysis.repetitivePhrases > gameStats.totalPitches / 2) {
-                tips.push("Avoid repeating the same phrases multiple times");
-            }
-            if (gameStats.pitchAnalysis.consecutiveFillers > gameStats.totalPitches / 2) {
-                tips.push("Try to avoid using multiple filler words in a row");
-            }
-
-            // Add general tips if no specific issues were identified
-            if (tips.length === 0) {
-                tips.push("Great job! Keep practicing to maintain your skills");
-                tips.push("Try to vary your pitch structure for different investors");
-            }
-
-            tips.forEach(tip => {
-                const li = document.createElement('li');
-                li.textContent = tip;
-                DOM.improvementTips.appendChild(li);
-            });
+            generateImprovementTips();
 
             // Show the summary modal
             DOM.summaryModal.classList.remove('hidden');
         }
 
-        function hideGameSummary() {
-            DOM.summaryModal.classList.add('hidden');
-            // Reset game stats for next game
-            gameStats = {
-                totalPitches: 0,
-                successfulPitches: 0,
-                failedPitches: 0,
-                averageScore: 0,
-                totalScore: 0,
-                pitchAnalysis: {
-                    tooSlow: 0,
-                    tooFast: 0,
-                    highFillerWords: 0,
-                    lowKeywordDensity: 0,
-                    repetitivePhrases: 0,
-                    consecutiveFillers: 0
-                },
-                pitchScores: [],
-                avgPitchScore: 0
-            };
+        function calculateFinalScore() {
+            // Base score from successful pitches (50 points each)
+            const successScore = gameStats.successfulPitches * 50;
+            
+            // Bonus points from average pitch quality (-5 to +5 points per pitch)
+            const qualityBonus = Math.round(gameStats.avgPitchScore * gameStats.totalPitches * 10);
+            
+            // Speed bonus (more pitches attempted = higher bonus)
+            const speedBonus = Math.round(gameStats.totalPitches * 5);
+            
+            // Success rate bonus (up to 100 bonus points for high success rate)
+            const successRate = gameStats.successfulPitches / gameStats.totalPitches;
+            const successRateBonus = Math.round(successRate * 100);
+            
+            const totalScore = Math.max(0, successScore + qualityBonus + speedBonus + successRateBonus);
+            
+            console.log(`Score Breakdown:
+                Success Score (${gameStats.successfulPitches} × 50): ${successScore}
+                Quality Bonus (avg ${gameStats.avgPitchScore.toFixed(1)}): ${qualityBonus}
+                Speed Bonus (${gameStats.totalPitches} pitches): ${speedBonus}
+                Success Rate Bonus (${(successRate * 100).toFixed(1)}%): ${successRateBonus}
+                Total: ${totalScore}`);
+            
+            return totalScore;
         }
 
-        /** Analyzes transcript for keywords and length */
-        function analyzePitch(transcript) {
-            const analysis = {
-                score: 0,
-                feedback: [],
-                hesitationCount: 0,
-                businessTerms: 0
-            };
-
-            // Check for hesitations and filler words
-            const hesitations = transcript.match(/\b(um|uh|er|like|you know|sort of|kind of|basically)\b/gi) || [];
-            analysis.hesitationCount = hesitations.length;
-            
-            // Detect pauses (represented by ..., multiple spaces, or punctuation)
-            const pauses = transcript.match(/\.{3,}|\s{2,}|[,.!?]\s+[,.!?]/g) || [];
-            
-            // Penalize for hesitations and excessive pauses
-            analysis.score -= (hesitations.length * 0.5);
-            analysis.score -= (pauses.length * 0.3);
-            
-            if (hesitations.length > 2) {
-                analysis.feedback.push("Try to reduce filler words and hesitations");
-            }
-
-            // Check for business/pitch relevant terms
-            const businessTerms = [
-                'market', 'growth', 'revenue', 'solution', 'problem', 'customer',
-                'business', 'product', 'service', 'value', 'innovation', 'strategy',
-                'opportunity', 'competitive', 'scalable', 'investment', 'return',
-                'profit', 'market share', 'target audience', 'unique selling proposition'
-            ];
-
-            const foundTerms = businessTerms.filter(term => 
-                new RegExp('\\b' + term + '\\b', 'i').test(transcript)
-            );
-            
-            analysis.businessTerms = foundTerms.length;
-            analysis.score += (foundTerms.length * 0.8);
-
-            // Check for pitch structure elements
-            const structureElements = {
-                problem: /\b(problem|challenge|issue|pain point)\b/i,
-                solution: /\b(solution|solve|address|fix|resolve)\b/i,
-                market: /\b(market|audience|customer|user|demographic)\b/i,
-                value: /\b(value|benefit|advantage|return|roi)\b/i
-            };
-
-            Object.entries(structureElements).forEach(([element, regex]) => {
-                if (regex.test(transcript)) {
-                    analysis.score += 1;
-                }
-            });
-
-            // Normalize score between -5 and 5
-            analysis.score = Math.max(-5, Math.min(5, analysis.score));
-
-            return analysis;
-        }
-
-        /** Determines boredom factor based on pitch analysis */
-        function calculateBoredomFactor(analysis) {
-            let factor = 0.1; // Default: Very Fast
-            let reason = "(Default/Error)";
-
-            // Base factor from score
-            let scoreFactor = 0.1;
-            if (analysis.score <= 0) {
-                scoreFactor = 0.15;
-            } else if (analysis.score <= 2) {
-                scoreFactor = 0.6;
-            } else {
-                scoreFactor = 0.9;
-            }
-
-            // Speaking pace penalty
-            const wordsPerMinute = (analysis.words / (analysis.duration || 30)) * 60;
-            let paceFactor = 1.0;
-            if (wordsPerMinute < 100) {
-                paceFactor = 1.3; // Too slow
-            } else if (wordsPerMinute > 180) {
-                paceFactor = 1.2; // Too fast
-            }
-
-            // Keyword density bonus
-            const keywordDensity = analysis.positive / analysis.words;
-            let densityFactor = 1.0;
-            if (keywordDensity < 0.1) {
-                densityFactor = 1.4; // Very few keywords
-            } else if (keywordDensity > 0.3) {
-                densityFactor = 0.8; // Good keyword density
-            }
-
-            // Filler word penalty
-            const fillerRatio = analysis.negative / analysis.words;
-            let fillerFactor = 1.0;
-            if (fillerRatio > 0.15) {
-                fillerFactor = 1.5; // Too many filler words
-            } else if (fillerRatio > 0.1) {
-                fillerFactor = 1.3;
-            }
-
-            // Consecutive filler words penalty
-            let consecutiveFillerFactor = 1.0;
-            if (analysis.maxConsecutiveFillerWords >= 3) {
-                consecutiveFillerFactor = 1.4; // Heavy penalty for 3+ consecutive filler words
-            } else if (analysis.maxConsecutiveFillerWords >= 2) {
-                consecutiveFillerFactor = 1.2;
-            }
-
-            // Repetition penalty
-            let repetitionFactor = 1.0;
-            if (analysis.repetitionPenalty > 1) {
-                repetitionFactor = 1.3; // Significant penalty for repetitive phrases
-            } else if (analysis.repetitionPenalty > 0.5) {
-                repetitionFactor = 1.2;
-            }
-
-            // Progressive difficulty
-            const gameProgress = Math.min(1, analysis.score / 5);
-            const difficultyFactor = 1 + (gameProgress * 0.3); // Up to 30% harder
-
-            // Calculate final factor
-            factor = scoreFactor * paceFactor * densityFactor * fillerFactor * consecutiveFillerFactor * repetitionFactor * difficultyFactor;
-            
-            // Cap the factor between 0.1 and 1.5
-            factor = Math.max(0.1, Math.min(1.5, factor));
-
-            reason = `(Score:${scoreFactor.toFixed(2)} Pace:${paceFactor.toFixed(2)} Density:${densityFactor.toFixed(2)} Filler:${fillerFactor.toFixed(2)} Consec:${consecutiveFillerFactor.toFixed(2)} Rep:${repetitionFactor.toFixed(2)} Difficulty:${difficultyFactor.toFixed(2)})`;
-            console.log(`Boredom Factor: ${factor.toFixed(2)} ${reason}`);
-            
-            return factor;
-        }
-
-        /** Starts the pitch: initiates timers and voice recognition */
-        function startPitch(investorData) {
-            console.log("Debug: startPitch called.");
-            if (!isGameRunning || isPaused || isListening || investorData.isBeingPitched || investorData.hasBeenPitched || currentPitch) { return; }
-
-            currentPitch = investorData;
-            investorData.isBeingPitched = true;
-            investorData.element.style.outline = '3px solid blue';
-            investorData.boredomLevel = 0;
-            currentTranscript = '';
-
-            // Reset pitch analysis state for this investor
-            investorData.boredomIncrementFactor = 0.15;
-            investorData.pitchScore = 0;
-            investorData.pitchTimeLeft = PITCH_DURATION_SECONDS;
-            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 };
-
-            clearMessage();
-
-            // Start 30s Pitch Timer
-            const timerBar = investorData.element.querySelector('.timer-bar');
-            if(timerBar) timerBar.style.width = '100%';
-            
-            investorData.pitchTimerId = setInterval(() => {
-                if (isPaused || !investorData.isBeingPitched) return;
-                investorData.pitchTimeLeft--;
-                const timerWidth = (investorData.pitchTimeLeft / PITCH_DURATION_SECONDS) * 100;
-                if(timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
-                
-                if (investorData.pitchTimeLeft <= 0) {
-                    endPitch(investorData, false, "Time's up!");
-                }
-            }, 1000);
-
-            // Handle Voice Input
-            if (isSpeechApiAvailable) {
-                console.log("Debug: Speech API is available, attempting to start recognition.");
-                showMessage("Pitch Now!");
-                updateMicStatus('listening');
-                isListening = true;
-                if (DOM.transcriptArea) DOM.transcriptArea.textContent = 'Listening...';
-                if (DOM.pitchButton) DOM.pitchButton.classList.remove('hidden');
-                
-                try {
-                    recognition = new SpeechRecognition();
-                    recognition.continuous = true;
-                    recognition.interimResults = true;
-                    recognition.lang = 'en-US';
-                    
-                    let lastSpeechTime = Date.now();
-                    let pauseCheckInterval = setInterval(() => {
-                        if (isListening && Date.now() - lastSpeechTime > 1500) {
-                            console.log("Detected pause in speech");
-                            if (investorData.isBeingPitched) {
-                                investorData.boredomLevel += 15;
-                                const boredomBar = investorData.element.querySelector('.boredom-bar');
-                                if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
-                                
-                                if (investorData.boredomLevel >= 100) {
-                                    clearInterval(pauseCheckInterval);
-                                    endPitch(investorData, false, "Lost interest - too many pauses!");
-                                }
-                            }
-                        }
-                    }, 500);
-
-                    recognition.onresult = (event) => {
-                        lastSpeechTime = Date.now();
-                        const results = Array.from(event.results);
-                        currentTranscript = results
-                            .map(result => result[0].transcript)
-                            .join(' ');
-                        
-                        console.log('Speech detected:', currentTranscript);
-                        
-                        // Analyze the current transcript
-                        currentPitchAnalysis = analyzePitch(currentTranscript);
-                        
-                        // Update the feedback display
-                        updateFeedbackDisplay(currentPitchAnalysis);
-                        
-                        // Update boredom based on analysis
-                        if (investorData.isBeingPitched) {
-                            // Increase boredom for filler words
-                            if (currentPitchAnalysis.hesitationCount > 0) {
-                                investorData.boredomLevel += currentPitchAnalysis.hesitationCount * 5;
-                            }
-                            
-                            const boredomBar = investorData.element.querySelector('.boredom-bar');
-                            if(boredomBar) {
-                                boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
-                            }
-                            
-                            if (investorData.boredomLevel >= 100) {
-                                endPitch(investorData, false, "Lost interest - too many filler words!");
-                                return;
-                            }
-                        }
-
-                        // Update display
-                        if (DOM.transcriptArea) {
-                            DOM.transcriptArea.innerHTML = `Speaking: "${currentTranscript.substring(0, 50)}..."`;
-                        }
-                    };
-
-                    recognition.onend = () => {
-                        clearInterval(pauseCheckInterval);
-                        console.log("Speech recognition ended.");
-                        isListening = false;
-                        updateMicStatus('idle');
-                        if (DOM.pitchButton) DOM.pitchButton.classList.add('hidden');
-                        if (!investorData.boredomTimerId && investorData.isBeingPitched) {
-                            startBoredomTimer(investorData);
-                        }
-                        recognition = null;
-                    };
-
-                    recognition.start();
-                    console.log("Debug: recognition.start() called.");
-                } catch (e) {
-                    console.error("Error starting recognition:", e);
-                    showMessage("Error starting voice recognition", true);
-                    updateMicStatus('error');
-                    isListening = false;
-                    if (!investorData.boredomTimerId && investorData.isBeingPitched) {
-                        startBoredomTimer(investorData);
-                    }
-                }
-            } else {
-                console.log("Debug: Speech API not available path in startPitch.");
-                showMessage("Voice input not supported by browser.", true, true);
-                investorData.boredomIncrementFactor = 0.1;
-                startBoredomTimer(investorData);
-            }
-        }
-
-        /** Starts the boredom timer using the calculated factor */
-        function startBoredomTimer(investorData) {
-             if (!investorData || !investorData.isBeingPitched || investorData.boredomTimerId) return;
-             const boredomBar = investorData.element.querySelector('.boredom-bar');
-             const boredomInterval = 200;
-             // Make base boredom increase 3x faster
-             const boredomIncrement = (100 / (PITCH_DURATION_SECONDS * (1000 / boredomInterval) * investorData.boredomIncrementFactor)) * 3;
-             console.log(`Starting boredom timer. Factor: ${investorData.boredomIncrementFactor.toFixed(2)}, Increment: ${boredomIncrement.toFixed(3)}`);
-
-             investorData.boredomTimerId = setInterval(() => {
-                 if (!investorData.isBeingPitched || isPaused) return;
-                 
-                 // Add extra boredom for consecutive filler words
-                 if (currentPitchAnalysis.maxConsecutiveFillerWords >= 2) {
-                     investorData.boredomLevel += currentPitchAnalysis.maxConsecutiveFillerWords * 20; // Doubled from 10 to 20
-                 }
-                 
-                 // Add extra boredom for high filler word ratio
-                 const fillerRatio = currentPitchAnalysis.negative / currentPitchAnalysis.words;
-                 if (fillerRatio > 0.15) {
-                     investorData.boredomLevel += 10; // Added penalty for high filler ratio
-                 }
-
-                 investorData.boredomLevel += boredomIncrement;
-                 if(boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
-
-                 // Success Condition - stricter requirements
-                 if (investorData.pitchTimeLeft <= PITCH_DURATION_SECONDS - 5) { // Changed from 8 to 5 seconds
-                     const baseSuccessChance = 0.12; // Increased from 0.08 to allow quicker success
-                     const scoreBonus = (investorData.pitchScore > 0) ? Math.min(0.2, investorData.pitchScore * 0.08) : 0;
-                     const boredomFactor = (1 - (investorData.boredomLevel / 100)); // Changed from 125 to 100
-                     const successChance = Math.max(0.01, (baseSuccessChance + scoreBonus) * boredomFactor);
-
-                     if (Math.random() < successChance && investorData.boredomLevel < 75) { // Changed from 90 to 75
-                         endPitch(investorData, true, "Great pitch!");
-                         return;
-                     }
-                 }
-
-                 // Failure Condition - happens sooner
-                 if (investorData.boredomLevel >= 100) {
-                     endPitch(investorData, false, "Lost interest!");
-                 }
-             }, boredomInterval);
-        }
-
-        // --- Other Functions (endPitch, removeInvestor, endGame, startGame, togglePause) ---
-        // Modify endPitch function to track statistics
         function endPitch(investorData, success, message) {
             if (!investorData || !investorData.isBeingPitched) return;
             stopRecognition();
@@ -751,28 +515,33 @@
             updateGameStats(currentPitchAnalysis, success);
             
             if (success) {
-                score++;
+                score = calculateFinalScore(); // Update the score based on all factors
                 updateScoreDisplay();
                 showMessage("👍 Great pitch! Click another investor to continue.", false);
-                if (faceSpan) faceSpan.textContent = '👍';  // Show thumbs up
+                if (faceSpan) faceSpan.textContent = '👍';
                 investorData.element.style.backgroundColor = '#4ade80';
-                setTimeout(() => removeInvestor(investorData), 2000);  // Increased from 1500 to 2000
+                setTimeout(() => removeInvestor(investorData), 2000);
             } else {
                 if (isGameRunning) {
-                    // Check if failure was due to boredom or time
                     const failMessage = message.includes("Lost interest") ? 
                         "👎 Bored! Click another investor to try again." : 
                         "⏰ Time's up! Click another investor to try again.";
                     showMessage(failMessage, true);
                 }
-                if (faceSpan) faceSpan.textContent = message.includes("Lost interest") ? '👎' : '⏰';  // Show thumbs down for boredom, clock for timeout
+                if (faceSpan) faceSpan.textContent = message.includes("Lost interest") ? '👎' : '⏰';
                 investorData.element.style.backgroundColor = '#f87171';
                 setTimeout(() => removeInvestor(investorData), 2000);
             }
+            
+            // Update the score display
+            score = calculateFinalScore();
+            updateScoreDisplay();
+            
             setTimeout(() => {
                 if (DOM.transcriptArea) DOM.transcriptArea.innerHTML = '';
             }, 1500);
         }
+
         function removeInvestor(investorData) {
             console.log("Removing investor...");
             if (investorData.pitchTimerId) clearInterval(investorData.pitchTimerId);
@@ -787,6 +556,7 @@
                 setTimeout(createInvestor, 1000);
             }
         }
+
         function endGame() {
             stopRecognition();
             isGameRunning = false;
@@ -814,6 +584,7 @@
             // Show the game summary
             showGameSummary();
         }
+
         function startGame() {
             console.log("Debug: startGame called.");
             if (isGameRunning) return;
@@ -883,6 +654,7 @@
             // Start spawning new investors
             investorSpawnIntervalId = setInterval(createInvestor, INVESTOR_SPAWN_INTERVAL_MS);
         }
+
         function togglePause() {
             if (!isGameRunning) return;
             
