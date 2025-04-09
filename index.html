@@ -28,6 +28,33 @@
       .keyword-feedback { font-size: 0.8rem; color: #6b7280; } /* gray-500 */
       #rules-modal li { margin-bottom: 0.5rem; }
       #rules-modal strong { color: #1d4ed8; }
+      .feedback-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        font-size: 14px;
+        max-width: 300px;
+      }
+      .feedback-indicator .metric {
+        margin: 5px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .feedback-indicator .score {
+        font-weight: bold;
+        color: #4a90e2;
+      }
+      .warning {
+        color: #e74c3c;
+      }
+      .success {
+        color: #2ecc71;
+      }
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
@@ -37,12 +64,12 @@
             <h2 class="text-2xl font-bold mb-4 text-center text-blue-600">How to Play Pitch Frenzy!</h2>
             <ul class="list-disc list-inside mb-6 text-gray-700">
                  <li><strong>Purpose:</strong> Practice your elevator pitch with mock investors.</li>
-                 <li><strong>Goal:</strong> Successfully pitch to as many investors (🧐) as possible within the 10-minute time limit.</li>
-                 <li><strong>Pitching:</strong> Click an investor to start. Speak clearly when the mic icon (🎙️) turns red.</li>
+                 <li><strong>Goal:</strong> Successfully pitch to as many investors (🧐) as possible within the 3-minute time limit.</li>
+                 <li><strong>Pitching:</strong> Click an investor to start. Speak clearly when the mic icon (��️) turns red.</li>
                  <li><strong>Time Limit:</strong> Each investor only listens for 30 seconds (⏳).</li>
                  <li><strong>Boredom:</strong> Use relevant keywords ('market', 'growth', 'solution') to keep investors interested. Filler words ('um', 'like', 'hmm') or short pitches increase boredom (🟥).</li>
                  <li><strong>Failure (Pitch):</strong> If the boredom meter fills or the 30s timer runs out, the investor falls asleep (😴) and you fail that pitch.</li>
-                 <li><strong>Failure (Game):</strong> The game ends when the main 10-minute timer runs out. Aim for the highest score!</li>
+                 <li><strong>Failure (Game):</strong> The game ends when the main 3-minute timer runs out. Aim for the highest score!</li>
             </ul>
             <div class="text-center">
                 <button id="close-rules-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Got It!</button>
@@ -68,6 +95,15 @@
                     <ul id="improvement-tips" class="list-disc list-inside text-gray-700 space-y-2">
                     </ul>
                 </div>
+                <div class="border-t border-gray-200 pt-4 mt-4">
+                    <h3 class="font-semibold mb-2">Share Your Achievement:</h3>
+                    <div class="bg-gray-50 p-3 rounded-lg text-center">
+                        <p id="share-message" class="text-lg font-medium text-gray-800 mb-2">🎯 I pitched 0 investors and scored 0 points in Pitch Frenzy! Think you can beat my score? 🚀 #PitchFrenzy</p>
+                        <button onclick="copyShareMessage()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">
+                            Copy to Clipboard
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="text-center">
                 <button id="close-summary-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-150 ease-in-out">Play Again</button>
@@ -80,7 +116,7 @@
     <div class="flex justify-between w-full max-w-4xl mb-4 p-3 bg-white rounded-lg shadow">
         <div class="flex items-center space-x-2">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-             <span class="font-semibold">Time Left:</span> <span id="game-timer" class="font-mono text-lg text-red-600">10:00</span>
+             <span class="font-semibold">Time Left:</span> <span id="game-timer" class="font-mono text-lg text-red-600">03:00</span>
         </div>
         <div class="flex items-center space-x-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a2 2 0 0 1 1.79 1.11L15 5.88Z"/></svg>
@@ -104,6 +140,18 @@
          <div id="debug-warning-area" class="w-full max-w-md"></div>
     </div>
 
+    <div id="feedbackIndicator" class="feedback-indicator hidden">
+        <div class="metric">
+            <span>Pitch Quality:</span>
+            <span class="score" id="pitchScore">0</span>
+        </div>
+        <div class="metric">
+            <span>Business Terms:</span>
+            <span id="businessTerms">0</span>
+        </div>
+        <div id="realTimeFeedback" class="warning"></div>
+    </div>
+
     <script>
         console.log("Script execution started.");
 
@@ -123,8 +171,8 @@
         const isSpeechApiAvailable = !!SpeechRecognition;
         let currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: 0.2 }; // Store analysis results including factor
 
-        // --- Game Configuration & State --- (Same as v1.7)
-        const GAME_DURATION_SECONDS = 600; // 10 minutes
+        // --- Game Configuration & State ---
+        const GAME_DURATION_SECONDS = 180; // 3 minutes
         const PITCH_DURATION_SECONDS = 30;
         const MAX_INVESTORS = 12; // Increased from 8 to 12
         const INVESTOR_SPAWN_INTERVAL_MS = 3000; // Decreased from 5000 to 3000ms
@@ -168,7 +216,9 @@
                 lowKeywordDensity: 0,
                 repetitivePhrases: 0,
                 consecutiveFillers: 0
-            }
+            },
+            pitchScores: [],
+            avgPitchScore: 0
         };
 
         // --- Functions --- (formatTime, updateGameTimerDisplay, updateScoreDisplay, showMessage, clearMessage, updateMicStatus, showWarning, clearWarning, showRulesModal, hideRulesModal - same as v1.8)
@@ -218,33 +268,45 @@
         function showRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.remove('hidden'); } }
         function hideRulesModal() { if (DOM.rulesModal) { DOM.rulesModal.classList.add('hidden'); } }
 
-        function updateGameStats(analysis, success) {
+        function updateGameStats(pitchAnalysis, success) {
             gameStats.totalPitches++;
             if (success) gameStats.successfulPitches++;
             else gameStats.failedPitches++;
             
-            gameStats.totalScore += analysis.score;
+            gameStats.totalScore += pitchAnalysis.score;
             gameStats.averageScore = gameStats.totalScore / gameStats.totalPitches;
 
             // Track specific issues
-            const wordsPerMinute = (analysis.words / (analysis.duration || 30)) * 60;
+            const wordsPerMinute = (pitchAnalysis.words / (pitchAnalysis.duration || 30)) * 60;
             if (wordsPerMinute < 100) gameStats.pitchAnalysis.tooSlow++;
             if (wordsPerMinute > 180) gameStats.pitchAnalysis.tooFast++;
             
-            const fillerRatio = analysis.negative / analysis.words;
+            const fillerRatio = pitchAnalysis.negative / pitchAnalysis.words;
             if (fillerRatio > 0.15) gameStats.pitchAnalysis.highFillerWords++;
             
-            const keywordDensity = analysis.positive / analysis.words;
+            const keywordDensity = pitchAnalysis.positive / pitchAnalysis.words;
             if (keywordDensity < 0.1) gameStats.pitchAnalysis.lowKeywordDensity++;
             
-            if (analysis.repetitionPenalty > 1) gameStats.pitchAnalysis.repetitivePhrases++;
-            if (analysis.maxConsecutiveFillerWords >= 3) gameStats.pitchAnalysis.consecutiveFillers++;
+            if (pitchAnalysis.repetitionPenalty > 1) gameStats.pitchAnalysis.repetitivePhrases++;
+            if (pitchAnalysis.maxConsecutiveFillerWords >= 3) gameStats.pitchAnalysis.consecutiveFillers++;
+
+            // Store pitch quality metrics
+            if (pitchAnalysis) {
+                gameStats.pitchScores.push(pitchAnalysis.score);
+                gameStats.avgPitchScore = gameStats.pitchScores.reduce((a, b) => a + b, 0) / gameStats.pitchScores.length;
+            }
         }
 
         function showGameSummary() {
             // Update summary displays
             DOM.successfulPitchesDisplay.textContent = gameStats.successfulPitches;
             DOM.finalScoreDisplay.textContent = score;
+
+            // Update share message
+            const shareMessage = document.getElementById('share-message');
+            if (shareMessage) {
+                shareMessage.textContent = `🎯 I pitched ${gameStats.totalPitches} investors and scored ${score} points in Pitch Frenzy! Think you can beat my score? 🚀 #PitchFrenzy`;
+            }
 
             // Clear previous stats
             DOM.performanceStats.innerHTML = '';
@@ -316,82 +378,69 @@
                     lowKeywordDensity: 0,
                     repetitivePhrases: 0,
                     consecutiveFillers: 0
-                }
+                },
+                pitchScores: [],
+                avgPitchScore: 0
             };
         }
 
         /** Analyzes transcript for keywords and length */
         function analyzePitch(transcript) {
-            console.log("Analyzing transcript:", transcript);
-            const words = transcript.toLowerCase().split(/\s+/).filter(Boolean);
-            const wordCount = words.length;
-            let positiveCount = 0;
-            let negativeCount = 0;
-            let foundPositive = [];
-            let foundNegative = [];
-            
-            // Track speaking patterns
-            let consecutiveFillerWords = 0;
-            let maxConsecutiveFillerWords = 0;
-            let lastWordWasFiller = false;
-            let repeatedPhrases = new Map();
-            let currentPhrase = [];
-            
-            words.forEach((word, index) => {
-                const cleanWord = word.replace(/[.,!?]/g, '');
-                console.log("Checking word:", cleanWord);
-                
-                // Check for repeated phrases (3+ words)
-                currentPhrase.push(cleanWord);
-                if (currentPhrase.length >= 3) {
-                    const phrase = currentPhrase.slice(-3).join(' ');
-                    repeatedPhrases.set(phrase, (repeatedPhrases.get(phrase) || 0) + 1);
-                }
-                
-                if (POSITIVE_KEYWORDS.includes(cleanWord)) {
-                    positiveCount++;
-                    foundPositive.push(cleanWord);
-                    consecutiveFillerWords = 0;
-                    lastWordWasFiller = false;
-                } else if (NEGATIVE_KEYWORDS.includes(cleanWord)) {
-                    negativeCount++;
-                    foundNegative.push(cleanWord);
-                    if (lastWordWasFiller) {
-                        consecutiveFillerWords++;
-                        maxConsecutiveFillerWords = Math.max(maxConsecutiveFillerWords, consecutiveFillerWords);
-                    } else {
-                        consecutiveFillerWords = 1;
-                    }
-                    lastWordWasFiller = true;
-                } else {
-                    consecutiveFillerWords = 0;
-                    lastWordWasFiller = false;
-                }
-            });
-
-            // Calculate speaking duration (approximate)
-            const estimatedDuration = Math.max(5, Math.ceil(wordCount / 2.5)); // Assuming average speaking rate of 2.5 words per second
-            
-            // Calculate repetition score
-            let repetitionPenalty = 0;
-            repeatedPhrases.forEach((count, phrase) => {
-                if (count > 1) {
-                    repetitionPenalty += (count - 1) * 0.5;
-                }
-            });
-
-            const score = positiveCount - negativeCount - repetitionPenalty;
-            console.log(`Pitch Analysis: Words=${wordCount}, Positive=${positiveCount} (${foundPositive.join(',')}), Negative=${negativeCount} (${foundNegative.join(',')}), Max Consecutive Fillers=${maxConsecutiveFillerWords}, Repetition Penalty=${repetitionPenalty.toFixed(2)}, Score=${score}`);
-
-            return { 
-                score: score, 
-                words: wordCount, 
-                positive: positiveCount, 
-                negative: negativeCount,
-                duration: estimatedDuration,
-                maxConsecutiveFillerWords: maxConsecutiveFillerWords,
-                repetitionPenalty: repetitionPenalty
+            const analysis = {
+                score: 0,
+                feedback: [],
+                hesitationCount: 0,
+                businessTerms: 0
             };
+
+            // Check for hesitations and filler words
+            const hesitations = transcript.match(/\b(um|uh|er|like|you know|sort of|kind of|basically)\b/gi) || [];
+            analysis.hesitationCount = hesitations.length;
+            
+            // Detect pauses (represented by ..., multiple spaces, or punctuation)
+            const pauses = transcript.match(/\.{3,}|\s{2,}|[,.!?]\s+[,.!?]/g) || [];
+            
+            // Penalize for hesitations and excessive pauses
+            analysis.score -= (hesitations.length * 0.5);
+            analysis.score -= (pauses.length * 0.3);
+            
+            if (hesitations.length > 2) {
+                analysis.feedback.push("Try to reduce filler words and hesitations");
+            }
+
+            // Check for business/pitch relevant terms
+            const businessTerms = [
+                'market', 'growth', 'revenue', 'solution', 'problem', 'customer',
+                'business', 'product', 'service', 'value', 'innovation', 'strategy',
+                'opportunity', 'competitive', 'scalable', 'investment', 'return',
+                'profit', 'market share', 'target audience', 'unique selling proposition'
+            ];
+
+            const foundTerms = businessTerms.filter(term => 
+                new RegExp('\\b' + term + '\\b', 'i').test(transcript)
+            );
+            
+            analysis.businessTerms = foundTerms.length;
+            analysis.score += (foundTerms.length * 0.8);
+
+            // Check for pitch structure elements
+            const structureElements = {
+                problem: /\b(problem|challenge|issue|pain point)\b/i,
+                solution: /\b(solution|solve|address|fix|resolve)\b/i,
+                market: /\b(market|audience|customer|user|demographic)\b/i,
+                value: /\b(value|benefit|advantage|return|roi)\b/i
+            };
+
+            Object.entries(structureElements).forEach(([element, regex]) => {
+                if (regex.test(transcript)) {
+                    analysis.score += 1;
+                }
+            });
+
+            // Normalize score between -5 and 5
+            analysis.score = Math.max(-5, Math.min(5, analysis.score));
+
+            return analysis;
         }
 
         /** Determines boredom factor based on pitch analysis */
@@ -453,7 +502,7 @@
             }
 
             // Progressive difficulty
-            const gameProgress = Math.min(1, score / 5);
+            const gameProgress = Math.min(1, analysis.score / 5);
             const difficultyFactor = 1 + (gameProgress * 0.3); // Up to 30% harder
 
             // Calculate final factor
@@ -480,7 +529,7 @@
             investorData.boredomIncrementFactor = 0.15;
             investorData.pitchScore = 0;
             investorData.pitchTimeLeft = PITCH_DURATION_SECONDS; // Initialize the timer to 30 seconds
-            currentPitchAnalysis = { score: 0, words: 0, positive: 0, negative: 0, boredomFactor: investorData.boredomIncrementFactor };
+            currentPitchAnalysis = analyzePitch(transcript);
 
             clearMessage();
 
@@ -843,6 +892,63 @@
             DOM.gameArea.appendChild(investorData.element);
             investors.push(investorData);
             console.log("Investor created. Total investors:", investors.length);
+        }
+
+        function updateFeedbackDisplay(analysis) {
+            const feedbackIndicator = document.getElementById('feedbackIndicator');
+            const pitchScore = document.getElementById('pitchScore');
+            const businessTerms = document.getElementById('businessTerms');
+            const realTimeFeedback = document.getElementById('realTimeFeedback');
+            
+            feedbackIndicator.classList.remove('hidden');
+            pitchScore.textContent = analysis.score.toFixed(1);
+            businessTerms.textContent = analysis.businessTerms;
+            
+            // Show real-time feedback
+            if (analysis.hesitationCount > 2) {
+                realTimeFeedback.textContent = "Try to reduce filler words";
+                realTimeFeedback.className = "warning";
+            } else if (analysis.businessTerms < 2) {
+                realTimeFeedback.textContent = "Include more business terms";
+                realTimeFeedback.className = "warning";
+            } else {
+                realTimeFeedback.textContent = "Good flow!";
+                realTimeFeedback.className = "success";
+            }
+        }
+
+        // Update the processTranscript function to include real-time feedback
+        function processTranscript(transcript) {
+            if (!currentPitch || !isGameRunning) return;
+            
+            const analysis = analyzePitch(transcript);
+            updateFeedbackDisplay(analysis);
+            currentPitchAnalysis = analysis;
+            
+            // Update the investor's boredom based on the pitch quality
+            const boredomModifier = Math.max(0.5, 1 - (analysis.score / 10));
+            currentPitch.boredomIncrementFactor = BOREDOM_INCREMENT * boredomModifier;
+        }
+
+        function copyShareMessage() {
+            const shareMessage = document.getElementById('share-message');
+            if (shareMessage) {
+                navigator.clipboard.writeText(shareMessage.textContent)
+                    .then(() => {
+                        const button = shareMessage.nextElementSibling;
+                        const originalText = button.textContent;
+                        button.textContent = 'Copied!';
+                        button.classList.add('bg-green-500', 'hover:bg-green-700');
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.classList.remove('bg-green-500', 'hover:bg-green-700');
+                            button.classList.add('bg-blue-500', 'hover:bg-blue-700');
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy text: ', err);
+                    });
+            }
         }
 
     </script>
