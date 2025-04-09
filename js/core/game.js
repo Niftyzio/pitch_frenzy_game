@@ -1,3 +1,6 @@
+import soundManager from './sound-manager.js';
+import { calculatePitchScore } from '../analysis/pitch-analysis.js';
+
 // Game Configuration Constants
 const GAME_DURATION_SECONDS = 180;  // 3 minutes total game time
 const PITCH_DURATION_SECONDS = 30;  // 30 seconds per pitch
@@ -80,10 +83,7 @@ let isListening = false;
 let rulesShown = false;
 let activePowerUps = new Set();
 
-import soundManager from './sound-manager.js';
-
 export function startGame() {
-    console.log("Debug: startGame called.");
     if (isGameRunning) return;
     
     if (!rulesShown) {
@@ -93,24 +93,8 @@ export function startGame() {
     }
     
     // Reset game state
-    score = 0;
-    gameTimeLeft = GAME_DURATION_SECONDS;
-    isGameRunning = true;
-    isPaused = false;
-    currentPitch = null;
-    
-    // Play game start sound
+    resetGame();
     soundManager.play('GAME_START');
-    
-    // Update UI
-    updateScoreDisplay();
-    updateGameTimerDisplay();
-    updateGameControls(true);
-    
-    // Clear messages and update status
-    clearMessage();
-    updateMicStatus('idle');
-    clearWarnings();
     
     // Start game systems
     startGameTimer();
@@ -230,31 +214,12 @@ function createInvestor() {
 
 function activatePowerUp(powerUp, investor) {
     if (!powerUp) return;
-
+    
     soundManager.play('POWER_UP');
     activePowerUps.add(powerUp.name);
     showMessage(`🎉 Power-up activated: ${powerUp.name}!`, false);
-
-    switch (powerUp.effect) {
-        case "freezeBoredom":
-            investor.boredomIncrementFactor = 0;
-            setTimeout(() => {
-                investor.boredomIncrementFactor = BOREDOM_CONFIG.BASE_INCREMENT * investor.type.boredomRate;
-                activePowerUps.delete(powerUp.name);
-            }, powerUp.duration);
-            break;
-        case "doubleScore":
-            investor.scoreMultiplier *= 2;
-            setTimeout(() => {
-                investor.scoreMultiplier /= 2;
-                activePowerUps.delete(powerUp.name);
-            }, powerUp.duration);
-            break;
-        case "resetBoredom":
-            investor.boredomLevel = 0;
-            activePowerUps.delete(powerUp.name);
-            break;
-    }
+    
+    applyPowerUpEffect(powerUp, investor);
 }
 
 function startPitch(investor) {
@@ -262,24 +227,23 @@ function startPitch(investor) {
     
     investor.isBeingPitched = true;
     currentPitch = investor;
-    
-    // Play pitch start sound
     soundManager.play('PITCH_START');
     
-    // ... rest of startPitch function ...
+    // Start pitch timer and boredom tracking
+    startPitchTimer(investor);
+    startBoredomTimer(investor);
 }
 
 function endPitch(investor, success, message) {
     if (!investor || !investor.isBeingPitched) return;
     
-    // Play appropriate sound based on outcome
-    if (success) {
-        soundManager.play('PITCH_SUCCESS');
-    } else {
-        soundManager.play('PITCH_FAIL');
-    }
+    soundManager.play(success ? 'PITCH_SUCCESS' : 'PITCH_FAIL');
     
-    // ... rest of endPitch function ...
+    // Update game statistics
+    updateGameStats(currentPitchAnalysis, success);
+    
+    // Handle investor animation and removal
+    handlePitchEnd(investor, success, message);
 }
 
 function updateComboLevel(level) {
@@ -306,10 +270,26 @@ function handleInvestorClick(investor) {
 }
 
 function updateBoredomLevel(investor) {
-    // ... existing boredom update logic ...
+    if (!investor.isBeingPitched || isPaused) return;
     
-    if (investor.boredomLevel > 80) {
+    // Calculate boredom increase
+    let boredomIncrease = calculateBoredomIncrease(investor);
+    
+    // Update boredom level
+    investor.boredomLevel = Math.min(100, investor.boredomLevel + boredomIncrease);
+    
+    // Update visual indicator
+    updateBoredomBar(investor);
+    
+    // Check for high boredom warning
+    if (investor.boredomLevel > 80 && !investor.hasWarnedBoredom) {
         soundManager.play('BOREDOM_WARNING');
+        investor.hasWarnedBoredom = true;
+    }
+    
+    // Check for pitch failure due to boredom
+    if (investor.boredomLevel >= 100) {
+        endPitch(investor, false, "Lost interest!");
     }
 }
 
