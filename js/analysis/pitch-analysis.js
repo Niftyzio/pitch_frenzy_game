@@ -1,21 +1,63 @@
 // Scoring weights for different aspects of the pitch
 const SCORING_WEIGHTS = {
-    CONTENT: 0.4,        // 40% - What you say
-    DELIVERY: 0.3,       // 30% - How you say it
+    CONTENT: 0.5,        // 50% - Increased weight for what you say
+    DELIVERY: 0.2,       // 20% - Reduced weight for how you say it
     ENGAGEMENT: 0.2,     // 20% - How well you keep interest
     EFFICIENCY: 0.1      // 10% - Time management
 };
 
+// Combo system configuration
+const COMBO_SYSTEM = {
+    MIN_KEYWORDS_FOR_COMBO: 3,
+    COMBO_WINDOW_MS: 5000,
+    MAX_COMBO_MULTIPLIER: 2.0,
+    COMBO_STEPS: [1.0, 1.2, 1.5, 1.8, 2.0]
+};
+
+// Achievement system
+const ACHIEVEMENTS = {
+    PERFECT_PITCH: {
+        name: "🎯 Perfect Pitch",
+        description: "Score 9.5 or higher on a pitch",
+        reward: 100
+    },
+    COMBO_MASTER: {
+        name: "🔥 Combo Master",
+        description: "Achieve a 5x combo",
+        reward: 150
+    },
+    QUICK_TALKER: {
+        name: "⚡ Quick Talker",
+        description: "Complete a pitch in under 20 seconds",
+        reward: 75
+    },
+    KEYWORD_KING: {
+        name: "👑 Keyword King",
+        description: "Use 10+ business terms in one pitch",
+        reward: 125
+    }
+};
+
 // Minimum requirements for a decent pitch
 const REQUIREMENTS = {
-    MIN_WORDS: 30,               // Back to original minimum
-    MIN_BUSINESS_TERMS: 3,       // Back to original minimum
-    MAX_FILLER_RATIO: 0.2,      // Keeping more forgiving filler ratio
-    MIN_PITCH_DURATION: 15,     // Half of total pitch duration
+    MIN_WORDS: 25,               // Reduced minimum word count
+    MIN_BUSINESS_TERMS: 2,       // Reduced minimum business terms
+    MAX_FILLER_RATIO: 0.25,      // More forgiving filler ratio
+    MIN_PITCH_DURATION: 12,      // Reduced minimum duration
     OPTIMAL_WORDS_PER_MINUTE: {
-        MIN: 100,              // Keeping lower minimum pace
-        MAX: 160              // Keeping same maximum pace
+        MIN: 80,               // More forgiving minimum pace
+        MAX: 160              // Same maximum pace
     }
+};
+
+// Content scoring categories
+const CONTENT_CATEGORIES = {
+    PROBLEM: ["problem", "pain", "challenge", "need", "issue", "gap", "inefficient"],
+    SOLUTION: ["solution", "solve", "improve", "enhance", "optimize", "streamline"],
+    MARKET: ["market", "customer", "user", "demographic", "audience", "segment"],
+    BUSINESS: ["revenue", "profit", "monetize", "business model", "pricing"],
+    TRACTION: ["growth", "adoption", "retention", "users", "customers"],
+    UNIQUE: ["unique", "different", "innovative", "better", "advantage"]
 };
 
 /**
@@ -29,45 +71,44 @@ export function calculatePitchScore(pitchData) {
         aiAnalysis
     } = pitchData;
 
-    // 1. Content Score (4 points max)
+    // Calculate base scores
     const contentScore = calculateContentScore(transcript);
-
-    // 2. Delivery Score (3 points max)
     const deliveryScore = calculateDeliveryScore(aiAnalysis);
-
-    // 3. Engagement Score (2 points max)
     const engagementScore = calculateEngagementScore(boredomLevel);
-
-    // 4. Efficiency Score (1 point max)
     const efficiencyScore = calculateEfficiencyScore(transcript, duration);
 
-    // Calculate final score out of 10
+    // Calculate combo multiplier
+    const comboMultiplier = calculateComboMultiplier(transcript);
+
+    // Calculate final score with combo
     const finalScore = (
         (contentScore * SCORING_WEIGHTS.CONTENT) +
         (deliveryScore * SCORING_WEIGHTS.DELIVERY) +
         (engagementScore * SCORING_WEIGHTS.ENGAGEMENT) +
         (efficiencyScore * SCORING_WEIGHTS.EFFICIENCY)
-    ) * 10;
+    ) * comboMultiplier;
 
-    // Generate feedback
-    const feedback = generatePitchFeedback({
-        contentScore,
-        deliveryScore,
-        engagementScore,
-        efficiencyScore,
+    // Check for achievements
+    const achievements = checkAchievements({
+        score: finalScore,
+        duration,
         transcript,
-        duration
+        comboMultiplier
     });
 
     return {
-        score: Math.round(finalScore * 10) / 10, // Round to 1 decimal place
+        score: Math.min(10, Math.round(finalScore * 10) / 10),
         breakdown: {
             content: contentScore * 10,
             delivery: deliveryScore * 10,
             engagement: engagementScore * 10,
             efficiency: efficiencyScore * 10
         },
-        feedback
+        combo: {
+            multiplier: comboMultiplier,
+            level: getComboLevel(comboMultiplier)
+        },
+        achievements
     };
 }
 
@@ -76,20 +117,39 @@ function calculateContentScore(transcript) {
     const totalWords = words.length;
     
     if (totalWords < REQUIREMENTS.MIN_WORDS) {
-        return 0.2; // Minimum score for very short pitches
+        return 0.3; // Slightly higher minimum score
     }
 
-    // Check for business terms and key phrases
-    const businessTerms = words.filter(word => POSITIVE_KEYWORDS.includes(word)).length;
+    // Calculate category coverage
+    let coveredCategories = 0;
+    let totalKeywords = 0;
+    
+    for (const [category, keywords] of Object.entries(CONTENT_CATEGORIES)) {
+        const categoryHits = keywords.some(keyword => 
+            transcript.toLowerCase().includes(keyword)
+        );
+        if (categoryHits) {
+            coveredCategories++;
+            totalKeywords += keywords.filter(keyword => 
+                transcript.toLowerCase().includes(keyword)
+            ).length;
+        }
+    }
+
+    // Calculate scores
+    const coverageScore = coveredCategories / Object.keys(CONTENT_CATEGORIES).length;
+    const keywordDensity = totalKeywords / totalWords;
     const fillerWords = words.filter(word => NEGATIVE_KEYWORDS.includes(word)).length;
     const fillerRatio = fillerWords / totalWords;
 
-    // Score components
-    const keywordScore = Math.min(1, businessTerms / REQUIREMENTS.MIN_BUSINESS_TERMS);
+    // Penalties and bonuses
     const fillerPenalty = fillerRatio > REQUIREMENTS.MAX_FILLER_RATIO ? 
-        (fillerRatio - REQUIREMENTS.MAX_FILLER_RATIO) * 2 : 0;
-    
-    return Math.max(0, Math.min(1, keywordScore - fillerPenalty));
+        (fillerRatio - REQUIREMENTS.MAX_FILLER_RATIO) : 0;
+    const densityBonus = Math.min(0.2, keywordDensity); // Up to 0.2 bonus for keyword density
+
+    // Final content score calculation
+    const baseScore = (coverageScore * 0.7) + (densityBonus * 0.3);
+    return Math.max(0, Math.min(1, baseScore - fillerPenalty));
 }
 
 function calculateDeliveryScore(aiAnalysis) {
@@ -111,27 +171,95 @@ function calculateDeliveryScore(aiAnalysis) {
 }
 
 function calculateEngagementScore(boredomLevel) {
-    // Convert boredom level (0-100) to engagement score (0-1)
-    return Math.max(0, 1 - (boredomLevel / 100));
+    // More forgiving conversion of boredom level to engagement score
+    const normalizedBoredom = boredomLevel / 100;
+    return Math.max(0, 1 - (normalizedBoredom * 0.8)); // 20% more forgiving
 }
 
 function calculateEfficiencyScore(transcript, duration) {
     const words = transcript.split(/\s+/).length;
     const wordsPerMinute = (words / duration) * 60;
 
-    // Perfect score for hitting the optimal range
+    // More forgiving scoring for pace
     if (wordsPerMinute >= REQUIREMENTS.OPTIMAL_WORDS_PER_MINUTE.MIN &&
         wordsPerMinute <= REQUIREMENTS.OPTIMAL_WORDS_PER_MINUTE.MAX) {
         return 1;
     }
 
-    // Penalty for being too slow or too fast
+    // Reduced penalties for pace deviation
     const deviation = Math.min(
         Math.abs(wordsPerMinute - REQUIREMENTS.OPTIMAL_WORDS_PER_MINUTE.MIN),
         Math.abs(wordsPerMinute - REQUIREMENTS.OPTIMAL_WORDS_PER_MINUTE.MAX)
     );
 
-    return Math.max(0, 1 - (deviation / 100));
+    return Math.max(0, 1 - (deviation / 120)); // More forgiving deviation penalty
+}
+
+function calculateComboMultiplier(transcript) {
+    const words = transcript.toLowerCase().split(/\s+/);
+    let comboCount = 0;
+    let lastKeywordTime = 0;
+    let currentCombo = 0;
+
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        if (isBusinessKeyword(word)) {
+            const currentTime = Date.now();
+            if (currentTime - lastKeywordTime <= COMBO_SYSTEM.COMBO_WINDOW_MS) {
+                currentCombo++;
+            } else {
+                currentCombo = 1;
+            }
+            lastKeywordTime = currentTime;
+            comboCount = Math.max(comboCount, currentCombo);
+        }
+    }
+
+    const comboLevel = Math.min(
+        Math.floor(comboCount / COMBO_SYSTEM.MIN_KEYWORDS_FOR_COMBO),
+        COMBO_SYSTEM.COMBO_STEPS.length - 1
+    );
+
+    return COMBO_SYSTEM.COMBO_STEPS[comboLevel];
+}
+
+function getComboLevel(multiplier) {
+    const index = COMBO_SYSTEM.COMBO_STEPS.indexOf(multiplier);
+    return index + 1;
+}
+
+function checkAchievements(pitchData) {
+    const achievements = [];
+    const { score, duration, transcript, comboMultiplier } = pitchData;
+
+    // Check for perfect pitch
+    if (score >= 9.5) {
+        achievements.push(ACHIEVEMENTS.PERFECT_PITCH);
+    }
+
+    // Check for combo master
+    if (comboMultiplier >= COMBO_SYSTEM.MAX_COMBO_MULTIPLIER) {
+        achievements.push(ACHIEVEMENTS.COMBO_MASTER);
+    }
+
+    // Check for quick talker
+    if (duration < 20) {
+        achievements.push(ACHIEVEMENTS.QUICK_TALKER);
+    }
+
+    // Check for keyword king
+    const businessTerms = transcript.toLowerCase().split(/\s+/).filter(isBusinessKeyword).length;
+    if (businessTerms >= 10) {
+        achievements.push(ACHIEVEMENTS.KEYWORD_KING);
+    }
+
+    return achievements;
+}
+
+function isBusinessKeyword(word) {
+    return Object.values(CONTENT_CATEGORIES).some(category => 
+        category.includes(word)
+    );
 }
 
 function generatePitchFeedback(data) {
