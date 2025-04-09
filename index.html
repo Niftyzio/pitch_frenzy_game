@@ -788,9 +788,10 @@
 
             // Add performance statistics
             const stats = [
+                `Total Pitches: ${gameStats.totalPitches}`,
+                `Successful Pitches: ${gameStats.successfulPitches}`,
                 `Success Rate: ${((gameStats.successfulPitches / gameStats.totalPitches) * 100).toFixed(1)}%`,
-                `Average Pitch Score: ${gameStats.avgPitchScore.toFixed(1)}`,
-                `Total Pitches Attempted: ${gameStats.totalPitches}`
+                `Average Pitch Score: ${gameStats.avgPitchScore.toFixed(1)}`
             ];
             stats.forEach(stat => {
                 const li = document.createElement('li');
@@ -1304,7 +1305,9 @@
                     if (timerBar) timerBar.style.width = `${Math.max(0, timerWidth)}%`;
                     
                     if (investorData.pitchTimeLeft <= 0) {
-                        endPitch(investorData, false, "Time's up!");
+                        // If the investor isn't bored (boredom < 100), count it as a success
+                        const isSuccess = investorData.boredomLevel < 100;
+                        endPitch(investorData, isSuccess, isSuccess ? "Great pitch!" : "Time's up!");
                     }
                 }, 1000);
                 
@@ -1370,9 +1373,29 @@
         function startBoredomTimer(investorData) {
             if (investorData.boredomTimerId) clearInterval(investorData.boredomTimerId);
             
+            // Track silence
+            let lastTranscriptLength = 0;
+            let silenceCounter = 0;
+            const SILENCE_THRESHOLD = 5; // 500ms of silence increases boredom
+            
             investorData.boredomTimerId = setInterval(() => {
                 if (isPaused || !investorData.isBeingPitched) return;
                 
+                // Check for silence by comparing transcript length
+                const currentTranscriptLength = (DOM.transcriptArea?.textContent || '').length;
+                if (currentTranscriptLength === lastTranscriptLength) {
+                    silenceCounter++;
+                    if (silenceCounter >= SILENCE_THRESHOLD) {
+                        // Increase boredom more during silence
+                        investorData.boredomIncrementFactor *= 1.5;
+                    }
+                } else {
+                    silenceCounter = 0;
+                    investorData.boredomIncrementFactor = Math.max(0.2, investorData.boredomIncrementFactor / 1.5);
+                }
+                lastTranscriptLength = currentTranscriptLength;
+                
+                // Increase boredom level
                 investorData.boredomLevel += investorData.boredomIncrementFactor;
                 const boredomBar = investorData.element.querySelector('.boredom-bar');
                 if (boredomBar) boredomBar.style.width = `${Math.min(100, investorData.boredomLevel)}%`;
