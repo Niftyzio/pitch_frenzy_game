@@ -885,10 +885,14 @@
                 boredomTimerId: null,
                 boredomIncrementFactor: 0.2
             };
-            investorData.element.className = 'character';
-            investorData.element.style.left = `${Math.random() * (DOM.gameArea.clientWidth - 50)}px`;
-            investorData.element.style.top = `${Math.random() * (DOM.gameArea.clientHeight - 50)}px`;
-            investorData.element.style.backgroundColor = '#f3f4f6';
+            
+            // Use the correct class name 'investor' instead of 'character'
+            investorData.element.className = 'investor';
+            
+            // Add padding for the timer and boredom bars
+            const padding = 60; // Height of the investor element
+            investorData.element.style.left = `${Math.random() * (DOM.gameArea.clientWidth - padding)}px`;
+            investorData.element.style.top = `${Math.random() * (DOM.gameArea.clientHeight - padding)}px`;
             
             // Add timer and boredom meters
             investorData.element.innerHTML = `
